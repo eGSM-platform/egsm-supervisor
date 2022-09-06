@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <engines-to-wait>1</engines-to-wait>
+    <aggregator-to-wait>0</aggregator-to-wait>
+    <new-worker-spawn-load>90</new-worker-spawn-load>
+
+    <broker>
+        <host>localhost</host>
+        <port>1883</port>
+        <username>admin</username>
+        <password>password</password>
+    </broker>
+
+    <engine>
+        <engine_id>DummyProcess/instance1</engine_id>
+        <broker>
+            <host>localhost</host>
+            <port>1883</port>
+        </broker>
+        <info_model>./data/infoModel.xsd</info_model>
+        <process_model>./data/siena.xml</process_model>
+        <event_router_config>./data/binding1.xml</event_router_config>
+        <default_broker_host>localhost</default_broker_host>
+        <default_broker_port>1883</default_broker_port>
+    </engine>
+
+    <engine>
+        <engine_id>DummyProcess/instance2</engine_id>
+        <broker>
+            <host>localhost</host>
+            <port>1883</port>
+        </broker>
+        <info_model>./data/infoModel.xsd</info_model>
+        <process_model>./data/siena.xml</process_model>
+        <event_router_config>./data/binding1.xml</event_router_config>
+        <default_broker_host>localhost</default_broker_host>
+        <default_broker_port>1883</default_broker_port>
+    </engine>
+</configuration>
