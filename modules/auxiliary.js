@@ -1,7 +1,4 @@
-var Client = require('node-rest-client').Client;
-var client = new Client();
 const axios = require('axios').default;
-var Client = require('node-rest-client').Client;
 var FormData = require('form-data');
 
 var LOG = require('./logger')
@@ -46,14 +43,14 @@ module.exports = {
                         LOG.logWorker('WARNING', 'Server response code: ' + response.status, module.id)
                         resolve(false);
                     }
-                    else{
+                    else {
                         that.brokerconnections.push(broker)
                     }
                 })
                 return true
             },
 
-            addEngine: function (engine) {
+            addEngine: function (engine, informal_model, process_model, eventRouterConfig) {
                 //Check if the engine is not assigned to the worker yet (just for safety)
                 this.engines.forEach(item => {
                     if (item == engine.engineid) {
@@ -71,9 +68,9 @@ module.exports = {
                 //If all broker registration went well then register the engine itself
                 if (success) {
                     var formData = new FormData();
-                    formData.append("informal_model", engine.informal_model);
-                    formData.append("process_model", engine.process_model);
-                    formData.append("event_router_config", engine.eventRouterConfig);
+                    formData.append("informal_model", informal_model);
+                    formData.append("process_model", process_model);
+                    formData.append("event_router_config", eventRouterConfig);
 
                     formData.append("engine_id", engine.engineid);
                     formData.append("mqtt_broker", engine.default_broker.host);
@@ -97,19 +94,14 @@ module.exports = {
                 //Finally add the new engine to the local collection
                 this.engines.push(engine)
             },
-
-
         }
     },
 
-    Engine(engineid, brokers, default_broker, informal_model, process_model, eventRouterConfig) {
+    Engine(engineid, brokers, default_broker) {
         return {
             engineid: engineid,
             brokers: brokers,
             default_broker: default_broker,
-            informal_model: informal_model,
-            process_model: process_model,
-            eventRouterConfig: eventRouterConfig
         }
     },
 

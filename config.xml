@@ -10,6 +10,12 @@
         <username>admin</username>
         <password>password</password>
     </broker>
+    <broker>
+        <host>localhost</host>
+        <port>1884</port>
+        <username>admin</username>
+        <password>password</password>
+    </broker>
 
     <engine>
         <engine_id>DummyProcess/instance1</engine_id>
@@ -30,10 +36,28 @@
             <host>localhost</host>
             <port>1883</port>
         </broker>
-        <info_model>./data/infoModel.xsd</info_model>
-        <process_model>./data/siena.xml</process_model>
-        <event_router_config>./data/binding1.xml</event_router_config>
+        <info_model>./data/infoModel3.xsd</info_model>
+        <process_model>./data/siena3.xml</process_model>
+        <event_router_config>./data/binding2.xml</event_router_config>
         <default_broker_host>localhost</default_broker_host>
         <default_broker_port>1883</default_broker_port>
     </engine>
+
+    <agent>
+        <id>Agent 1</id>
+        <service type="deviation-detection" /> <!--Detects if any process in the group is deviated from the desired execution-->
+        <service type="phase-length-deviation" /> <!--Maintains a statistics about the execution time of each activities (or uses a predifined 
+            statistics and detects if in any case the execution takes significantly longer or shorter)-->
+        <service type="possible-deadline-violation" /> <!--Estimates remaining time to finish the process and detects if it doens't met with 
+            the predefined deadline-->
+        <service type="process-group-deadline-violation-detection" /> <!-- After defining Process Groups we can send notifications regarding all members if any other member 
+            process is late -->
+        <service type="process-group-deviation-detection" /> <!-- After defining Process Groups we can send notifacations regarding all processes if any 
+            member process became faulty -->
+        <service type="affected-artifacts" /> <!--In case of a process deviation it can list all artifacts participating in that process-->
+        <service type="affected-processes" /> <!--In case of a process deviation it can list all other process instances which are/were also affected by 
+            the same artifacts -->
+        <service type="external-event-subscriber" /> <!--Different participants can subscribe for automatic updates and event notifications -->
+    </agent>
+
 </configuration>

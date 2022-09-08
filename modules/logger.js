@@ -1,7 +1,7 @@
 var fs = require('fs');
 var util = require('util');
 
-const LOG_LEVELS = {'DEBUG': 1, 'WARNING': 2, 'ERORR': 3};
+const LOG_LEVELS = {'DEBUG': 1, 'WARNING': 2, 'ERROR': 3};
 var CONSOLE_LOG_LEVEL = LOG_LEVELS.DEBUG; //Console log from a defined level above
 
 var prefix = (new Date().toISOString().replace(/:/g,'')).replace(/\./g,'');

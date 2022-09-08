@@ -1,5 +1,6 @@
 
 var fs = require('fs');
+const multer = require('multer'); //For receiving files through HTTP POST
 var xml2js = require('xml2js');
 var Client = require('node-rest-client').Client;
 var client = new Client();
@@ -11,6 +12,15 @@ var jsonParser = bodyParser.json()
 //Websocket
 var WebSocketServer = require('websocket').server;
 var http = require('http');
+
+//Setting up storage for file posting
+const storage = multer.memoryStorage({
+    destination: function (req, file, callback) {
+        callback(null, "");
+    },
+})
+
+const upload = multer({ storage: storage });
 
 
 var LOG = require('./modules/logger')
@@ -138,21 +148,21 @@ function registerWorker(workerid, capacity, host, port) {
 function deregisterWorker(workerid) {
     LOG.logSystem('DEBUG', 'deregisterWorker function called', module.id)
     if (!WORKERS.has(workerid)) {
-        LOG.logSystem('DEBUG', `Worker [${workerid}] is not known, could not deregister`, module.id)
+        LOG.logSystem('WARNING', `Worker [${workerid}] is not known, could not deregister`, module.id)
         return false
     }
     if (WORKERS.get(workerid).engines.length != 0) {
-        LOG.logSystem('ERROR', `Worker [${workerid}] requested its deregistration, but it still has engine(s) assigned`, module.id)
+        LOG.logSystem('WARNING', `Worker [${workerid}] requested its deregistration, but it still has engine(s) assigned`, module.id)
     }
     WORKERS.delete(workerid)
-    LOG.logSystem('ERROR', `Worker [${workerid}] deregistered`, module.id)
+    LOG.logSystem('DEBUG', `Worker [${workerid}] deregistered`, module.id)
     return true
 }
 
 function registerEngine(engineid, brokers, default_broker, informal_model, process_model, eventRouterConfig) {
     LOG.logSystem('DEBUG', 'registerEngine function called', module.id)
     if (ENGINES.has(engineid)) {
-        LOG.logSystem('DEBUG', `Engine [${engineid}] is already registered`, module.id)
+        LOG.logSystem('WARNING', `Engine [${engineid}] is already registered`, module.id)
         return false
     }
 
@@ -160,23 +170,23 @@ function registerEngine(engineid, brokers, default_broker, informal_model, proce
     for (let [key, value] of WORKERS) {
         if (value.capacity > value.engines.length) {
             LOG.logSystem('DEBUG', `Engine [${engineid}] is now assigned to Worker [${key}]`, module.id)
-            var newEngine = aux.Engine(engineid, brokers, default_broker, informal_model, process_model, eventRouterConfig)
-            value.addEngine(newEngine)
+            var newEngine = aux.Engine(engineid, brokers, default_broker)
+            value.addEngine(newEngine, informal_model, process_model, eventRouterConfig)
             ENGINES.set(engineid, newEngine)
             LOG.logSystem('DEBUG', `Engine [${engineid}] initialized and created on Worker [${key}]`, module.id)
             resourceCheck()
             return true
         }
     }
-    LOG.logSystem('DEBUG', `Could not find free worker slot for Engine [${engineid}]`, module.id)
+    LOG.logSystem('ERROR', `Could not find free worker slot for Engine [${engineid}]`, module.id)
     resourceCheck()
     return false
 }
 
 function registerAgent(agentid, host, port) {
     LOG.logSystem('DEBUG', 'registerAgent function called', module.id)
-    if (AGENTS.has(agentid)) {
-        LOG.logSystem('DEBUG', `Agent [${agentid}] is already registered`, module.id)
+    if (AGENTS.indexOf(agentid) != -1) {
+        LOG.logSystem('WARNING', `Agent [${agentid}] is already registered`, module.id)
         return false
     }
     AGENTS.push(aux.Agent(agentid, host, port))
@@ -202,7 +212,7 @@ var server = http.createServer(function (request, response) {
     response.end();
 });
 server.listen(8080, function () {
-    console.log((new Date()) + ' Server is listening on port 8080');
+    console.log(' Server is listening on port 8080');
 });
 
 wsServer = new WebSocketServer({
@@ -238,6 +248,7 @@ wsServer.on('request', function (request) {
         else if (message.type === 'binary') {
             console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
             connection.sendBytes(message.binaryData);
+            
         }
     });
     connection.on('close', function (reasonCode, description) {
@@ -248,6 +259,7 @@ wsServer.on('request', function (request) {
 
 //ROUTES
 app.post("/worker/register", jsonParser, function (req, res) {
+    LOG.logSystem('DEBUG', 'Worker registering request received', module.id)
     if (typeof req.body == 'undefined') {
         LOG.logSystem('DEBUG', 'Request body is missing', module.id)
         return res.status(500).send({ error: "Body missing" })
@@ -299,7 +311,8 @@ app.post("/worker/deregister", jsonParser, function (req, res) {
     }
 })
 
-app.post("/agent/register", jsonParser, function (req, res) {
+app.post("/agent/register", jsonParser, upload.any(), function (req, res) {
+    LOG.logSystem('DEBUG', 'Agent registering request received', module.id)
     if (typeof req.body == 'undefined') {
         LOG.logSystem('DEBUG', 'Request body is missing', module.id)
         return res.status(500).send({ error: "Body missing" })
@@ -308,7 +321,7 @@ app.post("/agent/register", jsonParser, function (req, res) {
     //Check if necessary data fields are available
     var rest_api_port = req.body.rest_api_port
     var host = req.socket.remoteAddress.split(':')[3]
-    if ( host == "undefined" || typeof rest_api_port == "undefined") {
+    if (host == "undefined" || typeof rest_api_port == "undefined") {
         LOG.logSystem('DEBUG', 'Request cancelled. Argument(s) are missing', module.id)
         return res.status(500).send({ "error": "Argument(s) are missing" })
     }
@@ -324,6 +337,29 @@ app.post("/agent/register", jsonParser, function (req, res) {
     else {
         LOG.logSystem('DEBUG', `Internal server error`, module.id)
         res.status(500).send({})
+    }
+})
+
+app.post("/agent/deregister", jsonParser, function (req, res) {
+    LOG.logSystem('DEBUG', 'Agent deregistering request received', module.id)
+    var agent_id = req.body.agent_id
+    if (typeof agent_id == 'undefined') {
+        LOG.logSystem('DEBUG', 'Request cancelled. Argument(s) are missing', module.id)
+        return res.status(500).send({ "error": "Argument(s) are missing" })
+    }
+    if (deregisterAgent(agent_id)) {
+        LOG.logSystem(`DEBUG`, `Agent [${agent_id}] removed from supervisor`, module.id)
+        return res.status(200)
+            .send({
+                "message": "deregistered"
+            })
+    }
+    else {
+        LOG.logSystem(`DEBUG`, `Error while deregistering Agent [${agent_id}]`, module.id)
+        return res.status(500)
+            .send({
+                "message": "error while deregistering"
+            })
     }
 })
 
