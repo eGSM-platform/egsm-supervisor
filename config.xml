@@ -23,22 +23,9 @@
             <host>localhost</host>
             <port>1883</port>
         </broker>
-        <info_model>./data/infoModel.xsd</info_model>
-        <process_model>./data/siena.xml</process_model>
-        <event_router_config>./data/binding1.xml</event_router_config>
-        <default_broker_host>localhost</default_broker_host>
-        <default_broker_port>1883</default_broker_port>
-    </engine>
-
-    <engine>
-        <engine_id>DummyProcess/instance2</engine_id>
-        <broker>
-            <host>localhost</host>
-            <port>1883</port>
-        </broker>
-        <info_model>./data/infoModel3.xsd</info_model>
-        <process_model>./data/siena3.xml</process_model>
-        <event_router_config>./data/binding2.xml</event_router_config>
+        <info_model>./data/infoModel_vm.xsd</info_model>
+        <process_model>./data/egsm_vm.xml</process_model>
+        <event_router_config>./data/binding_vm.xml</event_router_config>
         <default_broker_host>localhost</default_broker_host>
         <default_broker_port>1883</default_broker_port>
     </engine>
