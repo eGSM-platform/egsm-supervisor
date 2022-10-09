@@ -25,6 +25,7 @@ module.exports = {
             brokerconnections: [],
 
             addBrokerConnection: function (broker) {
+                LOG.logSystem('DEBUG', `Adding broker connection ([${broker.host}]:[${broker.port}]) for Worker ${this.id}`, module.id)
                 const config = {
                     method: 'post',
                     url: `http://${this.host}:${this.port}/broker_connection/new`,
@@ -52,9 +53,10 @@ module.exports = {
 
             addEngine: function (engine, informal_model, process_model, eventRouterConfig) {
                 //Check if the engine is not assigned to the worker yet (just for safety)
+                LOG.logSystem('DEBUG', `Adding engine [${engine.engineid}] to Worker [${this.id}]`, module.id)
                 this.engines.forEach(item => {
                     if (item == engine.engineid) {
-                        console.log("engine is already added")
+                        LOG.logSystem('WARNING', `Engine [${engine.engineid}] is already added to Worker [${this.id}]`, module.id)
                         return true
                     }
                 })
@@ -90,10 +92,44 @@ module.exports = {
                             resolve(false);
                         }
                     })
+                    //Finally add the new engine to the local collection
+                    this.engines.push(engine)
                 }
-                //Finally add the new engine to the local collection
-                this.engines.push(engine)
+                else {
+                    LOG.logSystem('WARNING', `Error occurred while added brokers to Worker [${this.id}] for Engine [${engine.engineid}]`)
+                }
             },
+
+            removeEngine: function (engine) {
+                LOG.logSystem('DEBUG', `Removing engine [${engine.engineid}] from Worker [${this.id}]`, module.id)
+                var index = -1
+                for (var item in this.engines) {
+                    if (this.engines[item].engineid == engine.engineid) {
+                        index = item
+                        break
+                    }
+                }
+                if (item == -1) {
+                    LOG.logSystem('WARNING', `Engine [${engine.engineid}] is not registered to Worker [${this.id}], cannot be unregistered`)
+                    return false
+                }
+
+                const config = {
+                    method: 'delete',
+                    url: `http://${this.host}:${this.port}/engine/remove`,
+                    headers: { "Content-Type": "application/json" },
+                    data: {
+                        engine_id: engine.engineid
+                    }
+                }
+                axios(config).then(function (response) {
+                    if (response.status != 200) {
+                        LOG.logWorker('WARNING', 'Server response code: ' + response.status, module.id)
+                        resolve(false);
+                    }
+                })
+                this.engines = this.engines.splice(index, 1)
+            }
         }
     },
 

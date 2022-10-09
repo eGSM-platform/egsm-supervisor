@@ -10,12 +10,6 @@
         <username>admin</username>
         <password>password</password>
     </broker>
-    <broker>
-        <host>localhost</host>
-        <port>1884</port>
-        <username>admin</username>
-        <password>password</password>
-    </broker>
 
     <engine>
         <engine_id>DummyProcess/instance1</engine_id>
@@ -29,7 +23,20 @@
         <default_broker_host>localhost</default_broker_host>
         <default_broker_port>1883</default_broker_port>
     </engine>
-
+<!--
+    <engine>
+        <engine_id>DummyProcess/instance2</engine_id>
+        <broker>
+            <host>localhost</host>
+            <port>1883</port>
+        </broker>
+        <info_model>./data/infoModel_vm.xsd</info_model>
+        <process_model>./data/egsm_vm.xml</process_model>
+        <event_router_config>./data/binding_vm2.xml</event_router_config>
+        <default_broker_host>localhost</default_broker_host>
+        <default_broker_port>1883</default_broker_port>
+    </engine>
+-->
     <agent>
         <id>Agent 1</id>
         <service type="deviation-detection" /> <!--Detects if any process in the group is deviated from the desired execution-->
