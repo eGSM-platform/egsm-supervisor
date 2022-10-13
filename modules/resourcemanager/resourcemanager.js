@@ -6,7 +6,7 @@ module.id = 'RESOURCEMAN'
 
 //Global Variables
 var BROKERS = [] //List of brokers (and their credentials)
-var AGENTS = [] //List of aggregators
+var AGENTS = new Map() //Agent id -> Agent object
 var WORKERS = new Map() //Worker id -> Worker object
 var ENGINES = new Map() //Engine id -> Engine object
 
@@ -96,11 +96,11 @@ function deregisterEngine(engineid) {
 
 function registerAgent(agentid, host, port) {
     LOG.logSystem('DEBUG', 'registerAgent function called', module.id)
-    if (AGENTS.indexOf(agentid) != -1) {
+    if (AGENTS.has(agentid)) {
         LOG.logSystem('WARNING', `Agent [${agentid}] is already registered`, module.id)
         return false
     }
-    AGENTS.push(AUX.Agent(agentid, host, port))
+    AGENTS.set(agentid, AUX.Agent(agentid, host, port))
     LOG.logSystem('DEBUG', `Agnet [${agentid}] succesfully initialized`, module.id)
     return true
 }

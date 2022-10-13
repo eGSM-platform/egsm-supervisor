@@ -40,12 +40,14 @@ else if (process.argv.length > 3) {
     return
 }
 
-//PROGRAM ENTRY POINT
 
 //Apply definitions in configuration files (if exists)
-//Function will block until the defined number of Workers and Aggregators connect
+//Will block until the defined number of Workers and Aggregators connect
 if (typeof config != 'undefined') {
     LOG.logSystem('DEBUG', 'Applying configurations', module.id)
     AUTOCONFIG.applyConfig(config)
 }
 
+process.on('SIGINT', () => {
+    LOG.logSystem('DEBUG', 'SIGINT signal caught. Shutting down supervisor...', module.id)
+});

@@ -142,3 +142,10 @@ app.get("/test", jsonParser, function (req, res) {
 var server = app.listen(LOCAL_HTTP_PORT, function () {
     LOG.logSystem(`DEBUG`, `Supervisor listening on port ${LOCAL_HTTP_PORT}`, module.id)
 })
+
+process.on('SIGINT', () => {
+    server.close(() => {
+        LOG.logWorker(`DEBUG`, `Terminating REST API`, module.id)
+        process.exit()
+    });
+});
