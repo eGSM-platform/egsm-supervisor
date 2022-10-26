@@ -20,8 +20,8 @@ function applyConfig(config) {
     (async () => {
         while (true) {
             LOG.logSystem('DEBUG', `Waiting for ${config['configuration']['engines-to-wait'] - RESOURCEMAN.getNumberofWorkers() || 0} more workers and ${config['configuration']['aggregator-to-wait'] - RESOURCEMAN.getNumberofAgents() || 0} more Aggregators to connect`, module.id)
-            var workers_registered = RESOURCEMAN.getNumberofWorkers() >= config['configuration']['engines-to-wait']
-            var aggregators_registered = RESOURCEMAN.getNumberofAgents() >= config['configuration']['aggregator-to-wait']
+            var workers_registered = (RESOURCEMAN.getNumberofWorkers() >= config['configuration']['engines-to-wait'][0])
+            var aggregators_registered = (RESOURCEMAN.getNumberofAgents() >= config['configuration']['aggregator-to-wait'][0])
             if (workers_registered && aggregators_registered) {
                 break
             }

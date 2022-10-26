@@ -124,7 +124,7 @@ function getNumberofWorkers() {
 }
 
 function getNumberofAgents() {
-    return AGENTS.length
+    return AGENTS.size
 }
 
 function getBrokers() {
