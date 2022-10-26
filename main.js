@@ -5,7 +5,7 @@ var xml2js = require('xml2js');
 //var client = new Client();
 
 var ROUTER = require('./modules/communication/routes')
-var LOG = require('./modules/auxiliary/logger')
+var LOG = require('./modules/egsm-common/auxiliary/logManager')
 var AUTOCONFIG = require('./modules/config/autoconfig')
 
 

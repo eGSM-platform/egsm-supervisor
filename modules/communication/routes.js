@@ -5,7 +5,7 @@ var bodyParser = require('body-parser')
 var jsonParser = bodyParser.json()
 
 
-var LOG = require('../auxiliary/logger')
+var LOG = require('../egsm-common/auxiliary/logManager')
 var RESOURCEMAN = require('../resourcemanager/resourcemanager')
 
 module.id = 'ROUTES'

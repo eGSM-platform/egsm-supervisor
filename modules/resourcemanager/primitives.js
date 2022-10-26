@@ -1,9 +1,9 @@
 const axios = require('axios').default;
 var FormData = require('form-data');
 
-var LOG = require('./logger')
+var LOG = require('../egsm-common/auxiliary/logManager')
 
-module.id = "AUX"
+module.id = "PRIM"
 
 module.exports = {
     Broker: function (host, port, username, password) {
@@ -156,11 +156,5 @@ module.exports = {
             name: name,
             processes: processes
         }
-    },
-
-    sleep: function (ms) {
-        return new Promise((resolve) => {
-            setTimeout(resolve, ms);
-        });
     }
 }
