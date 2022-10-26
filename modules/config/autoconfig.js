@@ -2,7 +2,7 @@ var fs = require('fs');
 
 var RESOURCEMAN = require('../resourcemanager/resourcemanager')
 var LOG = require('../egsm-common/auxiliary/logManager')
-var AUX = require('../resourcemanager/primitives')
+var AUX = require('../egsm-common/auxiliary/auxiliary')
 
 module.id = 'AUTOCONF'
 
