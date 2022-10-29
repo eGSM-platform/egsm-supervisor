@@ -1,12 +1,13 @@
 
 var fs = require('fs');
 var xml2js = require('xml2js');
-//var Client = require('node-rest-client').Client;
-//var client = new Client();
 
 var ROUTER = require('./modules/communication/routes')
 var LOG = require('./modules/egsm-common/auxiliary/logManager')
 var AUTOCONFIG = require('./modules/config/autoconfig')
+var RESOURCEMAN = require('./modules/resourcemanager/resourcemanager')
+var MQTTCOMM = require('./modules/communication/mqttcommunication')
+var PRIM = require('./modules/egsm-common/auxiliary/primitives')
 
 
 module.id = 'MAIN'
@@ -26,6 +27,8 @@ if (process.argv.length == 3) {
                 LOG.logSystem('FATAL', `Error while parsing initialization file: ${err}`, module.id)
             }
             config = result
+            LOG.logSystem('DEBUG', 'Applying configurations', module.id)
+            AUTOCONFIG.applyConfig(config)
         })
     } catch (err) {
         LOG.logSystem('FATAL', `Error while reading initialization file: ${err}`, module.id)
@@ -34,20 +37,41 @@ if (process.argv.length == 3) {
 }
 else if (process.argv.length <= 3) {
     LOG.logSystem('DEBUG', 'Supervisor is starting without initialization file', module.id)
+    LOG.logSystem('DEBUG', 'Applying default MQTT broker settings', module.id)
+    if (!RESOURCEMAN.registerBroker('localhost', 1883, '', '')) {
+        LOG.logSystem('FATAL', 'Could not perform default config', module.id)
+    }
+    if (!RESOURCEMAN.setDefaultBroker({ host: 'localhost', port: 1883 })) {
+        LOG.logSystem('FATAL', 'Could not perform default config', module.id)
+    }
+
 }
 else if (process.argv.length > 3) {
     LOG.logSystem('FATAL', 'Too many arguments! Shutting down...', module.id)
     return
 }
 
-
-//Apply definitions in configuration files (if exists)
-//Will block until the defined number of Workers and Aggregators connect
-if (typeof config != 'undefined') {
-    LOG.logSystem('DEBUG', 'Applying configurations', module.id)
-    AUTOCONFIG.applyConfig(config)
-}
+MQTTCOMM.initBrokerConnection(RESOURCEMAN.getDefaultBroker())
 
 process.on('SIGINT', () => {
     LOG.logSystem('DEBUG', 'SIGINT signal caught. Shutting down supervisor...', module.id)
 });
+
+
+/*try {
+    const informal = fs.readFileSync('./data/infoModel_vm.xsd', 'utf8');
+    const process = fs.readFileSync('./data/egsm_vm.xml', 'utf8');
+    const eventr = fs.readFileSync('./data/binding_vm.xml', 'utf8');
+    var broker = new PRIM.Broker('localhost', 1883, '', '')
+    MQTTCOMM.createNewEngine('engine1', broker, informal, process, eventr)
+} catch (err) {
+    console.error(err);
+}*/
+
+/*MQTTCOMM.searchForEngine('engine1').then((result)=>{
+    console.log('final: ' + JSON.stringify(result))
+})*/
+
+MQTTCOMM.getAggregatorList().then((result)=>{
+    console.log(result)
+})
