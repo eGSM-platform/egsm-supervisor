@@ -1,5 +1,6 @@
 var MQTT = require('../egsm-common/communication/mqttconnector')
 var AUX = require('../egsm-common/auxiliary/auxiliary')
+var LOG = require('../egsm-common/auxiliary/logManager')
 
 //Topic definitions
 const TOPIC_IN_WORKER = 'supervisor_woker_in'
@@ -22,18 +23,27 @@ const AGGREGATOR_PONG_WAITING_PERIOD = 2500
 var REQUEST_PROMISES = new Map() //Request id -> resolve references
 var REQUEST_BUFFERS = new Map() //Request id -> Usage specific storage place (used only for specific type of requests)
 
-/*Message body contains:
+module.id = 'MQTTCOMM'
+
+/*Message body may contain:
 -sender_type: WORKER/AGGREGATOR
 -sender_id: <string>
 -message_type: PONG/PING/NEW_WORKER/NEW_ENGINE_SLOT/NEW_ENGINE_SLOT_RESP/NEW_ENGINE/SEARCH
 -request_id: <string> (optional if no response expected)
 -payload: <string>
 */
+
+/**
+ * Message handler function for MQTT messages
+ * It neglects the messages not intended to handle in this module
+ */
 function onMessageReceived(hostname, port, topic, message) {
+    LOG.logSystem('DEBUG', 'onMessageReceived function called', module.id)
     var msgJson = JSON.parse(message.toString())
     if (topic == TOPIC_IN_WORKER) {
         switch (msgJson['message_type']) {
             case 'NEW_ENGINE_SLOT_RESP':
+                LOG.logSystem('DEBUG', `NEW_ENGINE_SLOT_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
                 //Here several messages are expected and only the fastest one will be handled
                 //All the further messages will be neglected
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
@@ -42,9 +52,9 @@ function onMessageReceived(hostname, port, topic, message) {
                 }
                 break;
             case 'PONG':
+                LOG.logSystem('DEBUG', `PONG engine message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
                     if (REQUEST_BUFFERS.has(msgJson['request_id'])) {
-
                         var filteredMessage = {
                             worker: msgJson['sender_id'],
                             hostname: msgJson['payload']['hostname'],
@@ -55,6 +65,7 @@ function onMessageReceived(hostname, port, topic, message) {
                 }
                 break;
             case 'SEARCH':
+                LOG.logSystem('DEBUG', `SEARCH engine message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
                     REQUEST_PROMISES.get(msgJson['request_id'])(msgJson)
                     REQUEST_PROMISES.delete(msgJson['request_id'])
@@ -65,7 +76,7 @@ function onMessageReceived(hostname, port, topic, message) {
     else if (topic == TOPIC_IN_AGGREGATOR) {
         switch (msgJson['message_type']) {
             case 'PONG':
-
+                LOG.logSystem('DEBUG', `PONG aggregator message received, request_id: [${msgJson['request_id']}]`, module.id)
         }
     }
     else {
@@ -73,7 +84,12 @@ function onMessageReceived(hostname, port, topic, message) {
     }
 }
 
+/**
+ * Inits mqqt broker connection and subscribes to the necessary topics to start operation
+ * @param {Broker} broker Broker the supervisor should use to reach out to managed workers
+ */
 function initBrokerConnection(broker) {
+    LOG.logSystem('DEBUG', `initBrokerConnection function called`, module.id)
     MQTT_HOST = broker.host
     MQTT_PORT = broker.port
     MQTT_USER = broker.username
@@ -82,12 +98,22 @@ function initBrokerConnection(broker) {
     MQTT.init(onMessageReceived)
     MQTT.createConnection(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_USER_PW)
     MQTT.subscribeTopic(MQTT_HOST, MQTT_PORT, TOPIC_IN_WORKER)
+    LOG.logSystem('DEBUG', `initBrokerConnection function ran successfully`, module.id)
 }
 
+/**
+ * Helper function to perform waiting for responses
+ * @param {Number} delay Delay period in millis 
+ */
 async function wait(delay) {
     await AUX.sleep(delay)
 }
 
+/**
+ * Intended to find a free engine slot on any worker instance
+ * @returns Returns with a promise whose value will be 'no_response' in case of no free slot found and 
+ * it will contain the ID of a Worker with a free slot otherwise
+ */
 async function getFreeEngineSlot() {
     var request_id = 'random' //TODO UUID.v4();
     var message = {
@@ -104,9 +130,19 @@ async function getFreeEngineSlot() {
     return promise
 }
 
+/**
+ * Creates a new engine on a random Worker which has at least one free engine slot
+ * @param {String} engineid ID of the new engine
+ * @param {Broker} broker Broker on which the engine has the necessary artifacts
+ * @param {String} informal_model
+ * @param {String} process_model 
+ * @param {String} eventRouterConfig 
+ */
 function createNewEngine(engineid, broker, informal_model, process_model, eventRouterConfig) {
+    LOG.logSystem('DEBUG', `createNewEngine function called with engine ID: [${engineid}]`, module.id)
     getFreeEngineSlot().then((value) => {
         if (value != 'no_response') {
+            LOG.logSystem('DEBUG', `Free engine slot found on Worker: [${value}]`, module.id)
             var msgPayload = {
                 "engine_id": engineid,
                 "mqtt_broker": broker.host,
@@ -126,12 +162,19 @@ function createNewEngine(engineid, broker, informal_model, process_model, eventR
             MQTT.publishTopic(MQTT_HOST, MQTT_PORT, TOPIC_WORKER_STATIC + value, JSON.stringify(message))
         }
         else {
-            console.log('no free slot')
+            LOG.logSystem('WARNING', `No free engine slot found`, module.id)
         }
     })
 }
 
+/**
+ * Finds the location of a specified engine instance
+ * @param {String} engineid Engine id of the engine intended to be found
+ * @returns A PRomise, which contains the Worker ID, its hostname and RESP API port number, where the engine is placed,
+ * If not found its value will be 'not_found' 
+ */
 async function searchForEngine(engineid) {
+    LOG.logSystem('DEBUG', `Searching for Engine [${engineid}]`, module.id)
     var request_id = 'random' //TODO UUID.v4();
     var message = {
         "request_id": request_id,
@@ -148,7 +191,12 @@ async function searchForEngine(engineid) {
     return promise
 }
 
+/**
+ * Returns the list of online Worker instances
+ * @returns Returns a promise, which will contain the list of Workers after ENGINE_PONG_WAITING_PERIOD
+ */
 async function getWorkerList() {
+    LOG.logSystem('DEBUG', `getWorkerList function called`, module.id)
     var request_id = 'random' //TODO UUID.v4();
     var message = {
         "request_id": request_id,
@@ -159,6 +207,7 @@ async function getWorkerList() {
         REQUEST_PROMISES.set(request_id, resolve)
         REQUEST_BUFFERS.set(request_id, [])
         wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `getWorkerList waiting period elapsed`, module.id)
             var result = REQUEST_BUFFERS.get(request_id)
             REQUEST_PROMISES.delete(request_id)
             REQUEST_BUFFERS.delete(request_id)
@@ -174,7 +223,12 @@ function createNewMonitoringActivity() {
     //TODO
 }
 
+/**
+ * Returns the list of online Aggregator instances
+ * @returns Returns a promise, which will contain the list of Aggregator after AGGREGATOR_PONG_WAITING_PERIOD
+ */
 async function getAggregatorList() {
+    LOG.logSystem('DEBUG', `getAggregatorList function called`, module.id)
     var request_id = 'random' //TODO UUID.v4();
     var message = {
         "request_id": request_id,
@@ -185,6 +239,7 @@ async function getAggregatorList() {
         REQUEST_PROMISES.set(request_id, resolve)
         REQUEST_BUFFERS.set(request_id, [])
         wait(AGGREGATOR_PONG_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `getAggregatorList waiting period elapsed`, module.id)
             var result = REQUEST_BUFFERS.get(request_id)
             REQUEST_PROMISES.delete(request_id)
             REQUEST_BUFFERS.delete(request_id)
@@ -197,6 +252,7 @@ async function getAggregatorList() {
 
 module.exports = {
     initBrokerConnection: initBrokerConnection,
+
     createNewEngine: createNewEngine,
     searchForEngine: searchForEngine,
     getWorkerList: getWorkerList,

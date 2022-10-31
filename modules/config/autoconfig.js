@@ -14,14 +14,6 @@ function applyConfig(config) {
             LOG.logSystem('FATAL', 'Could not perform initialization defined in config', module.id)
         }
     }
-    var default_broker = config['configuration']['default-broker'][0]
-    default_broker = {
-        host: default_broker.host[0],
-        port: default_broker.port[0]
-    }
-    if (!RESOURCEMAN.setDefaultBroker(default_broker)) {
-        LOG.logSystem('FATAL', 'Could not perform initialization defined in config', module.id)
-    }
 }
 
 module.exports = {

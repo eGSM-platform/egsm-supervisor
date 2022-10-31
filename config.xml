@@ -8,9 +8,4 @@
         <password>password</password>
     </broker>
 
-    <default-broker>
-        <host>localhost</host>
-        <port>1883</port>
-    </default-broker>
-
 </configuration>

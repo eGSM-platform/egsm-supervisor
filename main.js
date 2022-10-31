@@ -41,9 +41,6 @@ else if (process.argv.length <= 3) {
     if (!RESOURCEMAN.registerBroker('localhost', 1883, '', '')) {
         LOG.logSystem('FATAL', 'Could not perform default config', module.id)
     }
-    if (!RESOURCEMAN.setDefaultBroker({ host: 'localhost', port: 1883 })) {
-        LOG.logSystem('FATAL', 'Could not perform default config', module.id)
-    }
 
 }
 else if (process.argv.length > 3) {
@@ -51,7 +48,9 @@ else if (process.argv.length > 3) {
     return
 }
 
-MQTTCOMM.initBrokerConnection(RESOURCEMAN.getDefaultBroker())
+RESOURCEMAN.getBrokers().forEach(element => {
+    MQTTCOMM.initBrokerConnection(element)
+});
 
 process.on('SIGINT', () => {
     LOG.logSystem('DEBUG', 'SIGINT signal caught. Shutting down supervisor...', module.id)
