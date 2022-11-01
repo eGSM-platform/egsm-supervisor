@@ -8,6 +8,7 @@ var AUTOCONFIG = require('./modules/config/autoconfig')
 var RESOURCEMAN = require('./modules/resourcemanager/resourcemanager')
 var MQTTCOMM = require('./modules/communication/mqttcommunication')
 var PRIM = require('./modules/egsm-common/auxiliary/primitives')
+var SOCKET = require('./modules/communication/socketserver')
 
 
 module.id = 'MAIN'
@@ -48,9 +49,8 @@ else if (process.argv.length > 3) {
     return
 }
 
-RESOURCEMAN.getBrokers().forEach(element => {
-    MQTTCOMM.initBrokerConnection(element)
-});
+//NOTO: Multi-Broker supervising is not supported yet, so only the first broker passed as argument in this function
+MQTTCOMM.initBrokerConnection(RESOURCEMAN.getBrokers()[0])
 
 process.on('SIGINT', () => {
     LOG.logSystem('DEBUG', 'SIGINT signal caught. Shutting down supervisor...', module.id)
@@ -71,6 +71,6 @@ process.on('SIGINT', () => {
     console.log('final: ' + JSON.stringify(result))
 })*/
 
-MQTTCOMM.getAggregatorList().then((result)=>{
+MQTTCOMM.getAggregatorList().then((result) => {
     console.log(result)
 })

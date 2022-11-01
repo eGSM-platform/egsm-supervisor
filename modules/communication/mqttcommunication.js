@@ -9,16 +9,13 @@ const TOPIC_OUT_WORKER = 'supervisor_worker_out'
 const TOPIC_IN_AGGREGATOR = 'supervisor_aggregator_in'
 const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
-var MQTT_HOST = undefined
-var MQTT_PORT = undefined;
-var MQTT_USER = undefined;
-var MQTT_USER_PW = undefined
+var BROKER = undefined
 
-const FREE_SLOT_WAITING_PERIOD = 2500
-const ENGINE_SEARCH_WAITING_PERIOD = 2500
-const ENGINE_PONG_WAITING_PERIOD = 2500
+const FREE_SLOT_WAITING_PERIOD = 500
+const ENGINE_SEARCH_WAITING_PERIOD = 500
+const ENGINE_PONG_WAITING_PERIOD = 500
 
-const AGGREGATOR_PONG_WAITING_PERIOD = 2500
+const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
 var REQUEST_PROMISES = new Map() //Request id -> resolve references
 var REQUEST_BUFFERS = new Map() //Request id -> Usage specific storage place (used only for specific type of requests)
@@ -86,18 +83,16 @@ function onMessageReceived(hostname, port, topic, message) {
 
 /**
  * Inits mqqt broker connection and subscribes to the necessary topics to start operation
- * @param {Broker} broker Broker the supervisor should use to reach out to managed workers
+ * @param {Broker} broker Broker the supervisor should use to reach out to the managed workers and aggregators
  */
 function initBrokerConnection(broker) {
+    BROKER = broker
     LOG.logSystem('DEBUG', `initBrokerConnection function called`, module.id)
-    MQTT_HOST = broker.host
-    MQTT_PORT = broker.port
-    MQTT_USER = broker.username
-    MQTT_USER_PW = broker.password
 
     MQTT.init(onMessageReceived)
-    MQTT.createConnection(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_USER_PW)
-    MQTT.subscribeTopic(MQTT_HOST, MQTT_PORT, TOPIC_IN_WORKER)
+    MQTT.createConnection(BROKER.host, BROKER.port, BROKER.username, BROKER.password)
+    MQTT.subscribeTopic(BROKER.host, BROKER.port, TOPIC_IN_WORKER)
+
     LOG.logSystem('DEBUG', `initBrokerConnection function ran successfully`, module.id)
 }
 
@@ -120,7 +115,8 @@ async function getFreeEngineSlot() {
         "request_id": request_id,
         "message_type": 'NEW_ENGINE_SLOT'
     }
-    MQTT.publishTopic(MQTT_HOST, MQTT_PORT, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         wait(FREE_SLOT_WAITING_PERIOD).then(() => {
@@ -159,7 +155,7 @@ function createNewEngine(engineid, broker, informal_model, process_model, eventR
                 message_type: 'NEW_ENGINE',
                 payload: msgPayload
             }
-            MQTT.publishTopic(MQTT_HOST, MQTT_PORT, TOPIC_WORKER_STATIC + value, JSON.stringify(message))
+            MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_WORKER_STATIC + value, JSON.stringify(message))
         }
         else {
             LOG.logSystem('WARNING', `No free engine slot found`, module.id)
@@ -181,7 +177,7 @@ async function searchForEngine(engineid) {
         "message_type": 'SEARCH',
         "payload": { "engine_id": engineid }
     }
-    MQTT.publishTopic(MQTT_HOST, MQTT_PORT, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         wait(ENGINE_SEARCH_WAITING_PERIOD).then(() => {
@@ -202,7 +198,7 @@ async function getWorkerList() {
         "request_id": request_id,
         "message_type": 'PING'
     }
-    MQTT.publishTopic(MQTT_HOST, MQTT_PORT, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         REQUEST_BUFFERS.set(request_id, [])
@@ -234,7 +230,7 @@ async function getAggregatorList() {
         "request_id": request_id,
         "message_type": 'PING'
     }
-    MQTT.publishTopic(MQTT_HOST, MQTT_PORT, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         REQUEST_BUFFERS.set(request_id, [])
