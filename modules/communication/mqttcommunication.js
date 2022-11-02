@@ -1,3 +1,5 @@
+var UUID = require("uuid");
+
 var MQTT = require('../egsm-common/communication/mqttconnector')
 var AUX = require('../egsm-common/auxiliary/auxiliary')
 var LOG = require('../egsm-common/auxiliary/logManager')
@@ -39,7 +41,7 @@ function onMessageReceived(hostname, port, topic, message) {
     var msgJson = JSON.parse(message.toString())
     if (topic == TOPIC_IN_WORKER) {
         switch (msgJson['message_type']) {
-            case 'NEW_ENGINE_SLOT_RESP':
+            case 'NEW_ENGINE_SLOT_RESP': {
                 LOG.logSystem('DEBUG', `NEW_ENGINE_SLOT_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
                 //Here several messages are expected and only the fastest one will be handled
                 //All the further messages will be neglected
@@ -48,12 +50,16 @@ function onMessageReceived(hostname, port, topic, message) {
                     REQUEST_PROMISES.delete(msgJson['request_id'])
                 }
                 break;
-            case 'PONG':
+            }
+            case 'PONG': {
                 LOG.logSystem('DEBUG', `PONG engine message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
                     if (REQUEST_BUFFERS.has(msgJson['request_id'])) {
                         var filteredMessage = {
-                            worker: msgJson['sender_id'],
+                            name: msgJson['sender_id'],
+                            engine_mumber: msgJson['payload']['engine_mumber'],
+                            capacity: msgJson['payload']['capacity'],
+                            uptime: msgJson['payload']['uptime'],
                             hostname: msgJson['payload']['hostname'],
                             port: msgJson['payload']['port']
                         }
@@ -61,19 +67,43 @@ function onMessageReceived(hostname, port, topic, message) {
                     }
                 }
                 break;
-            case 'SEARCH':
+            }
+            case 'SEARCH': {
                 LOG.logSystem('DEBUG', `SEARCH engine message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
                     REQUEST_PROMISES.get(msgJson['request_id'])(msgJson)
                     REQUEST_PROMISES.delete(msgJson['request_id'])
                 }
                 break;
+            }
+            case 'GET_ENGINE_LIST_RESP': {
+                LOG.logSystem('DEBUG', `GET_ENGINE_LIST_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    console.log(msgJson)
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['payload'])
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+            }
         }
     }
     else if (topic == TOPIC_IN_AGGREGATOR) {
         switch (msgJson['message_type']) {
-            case 'PONG':
+            case 'PONG': {
                 LOG.logSystem('DEBUG', `PONG aggregator message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    if (REQUEST_BUFFERS.has(msgJson['request_id'])) {
+                        var filteredMessage = {
+                            name: msgJson['sender_id'],
+                            activity_mumber: msgJson['payload']['activity_mumber'],
+                            uptime: msgJson['payload']['uptime'],
+                            hostname: msgJson['payload']['hostname'],
+                            port: msgJson['payload']['port']
+                        }
+                        REQUEST_BUFFERS.get(msgJson['request_id']).push(filteredMessage)
+                    }
+                }
+                break;
+            }
         }
     }
     else {
@@ -110,7 +140,7 @@ async function wait(delay) {
  * it will contain the ID of a Worker with a free slot otherwise
  */
 async function getFreeEngineSlot() {
-    var request_id = 'random' //TODO UUID.v4();
+    var request_id = UUID.v4();
     var message = {
         "request_id": request_id,
         "message_type": 'NEW_ENGINE_SLOT'
@@ -149,13 +179,13 @@ function createNewEngine(engineid, broker, informal_model, process_model, eventR
                 "process_model": process_model,
                 "event_router_config": eventRouterConfig
             }
-            var requestId = 'random' //TODO UUID.v4();
+            var requestId = UUID.v4();
             var message = {
                 request_id: requestId,
                 message_type: 'NEW_ENGINE',
                 payload: msgPayload
             }
-            MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_WORKER_STATIC + value, JSON.stringify(message))
+            MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
         }
         else {
             LOG.logSystem('WARNING', `No free engine slot found`, module.id)
@@ -171,7 +201,7 @@ function createNewEngine(engineid, broker, informal_model, process_model, eventR
  */
 async function searchForEngine(engineid) {
     LOG.logSystem('DEBUG', `Searching for Engine [${engineid}]`, module.id)
-    var request_id = 'random' //TODO UUID.v4();
+    var request_id = UUID.v4();
     var message = {
         "request_id": request_id,
         "message_type": 'SEARCH',
@@ -193,7 +223,7 @@ async function searchForEngine(engineid) {
  */
 async function getWorkerList() {
     LOG.logSystem('DEBUG', `getWorkerList function called`, module.id)
-    var request_id = 'random' //TODO UUID.v4();
+    var request_id = UUID.v4();
     var message = {
         "request_id": request_id,
         "message_type": 'PING'
@@ -204,9 +234,29 @@ async function getWorkerList() {
         REQUEST_BUFFERS.set(request_id, [])
         wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
             LOG.logSystem('DEBUG', `getWorkerList waiting period elapsed`, module.id)
-            var result = REQUEST_BUFFERS.get(request_id)
+            var result = REQUEST_BUFFERS.get(request_id) || []
             REQUEST_PROMISES.delete(request_id)
             REQUEST_BUFFERS.delete(request_id)
+
+            //Sorting the workers based on their name and adding index
+            result.sort((a, b) => {
+                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
+                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
+                if (nameA < nameB) {
+                    return -1;
+                }
+                if (nameA > nameB) {
+                    return 1;
+                }
+
+                // names must be equal
+                return 0;
+            });
+            var cnt = 1
+            result.forEach(element => {
+                element['index'] = cnt
+                cnt += 1
+            });
             resolve(result)
         })
     });
@@ -236,10 +286,47 @@ async function getAggregatorList() {
         REQUEST_BUFFERS.set(request_id, [])
         wait(AGGREGATOR_PONG_WAITING_PERIOD).then(() => {
             LOG.logSystem('DEBUG', `getAggregatorList waiting period elapsed`, module.id)
-            var result = REQUEST_BUFFERS.get(request_id)
+            var result = REQUEST_BUFFERS.get(request_id) || []
             REQUEST_PROMISES.delete(request_id)
             REQUEST_BUFFERS.delete(request_id)
+            //Sorting the aggregators based on their name and adding index
+            result.sort((a, b) => {
+                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
+                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
+                if (nameA < nameB) {
+                    return -1;
+                }
+                if (nameA > nameB) {
+                    return 1;
+                }
+
+                // names must be equal
+                return 0;
+            });
+            var cnt = 1
+            result.forEach(element => {
+                element['index'] = cnt
+                cnt += 1
+            });
             resolve(result)
+        })
+    });
+    return promise
+}
+
+function getWorkerEngineList(workername) {
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'GET_ENGINE_LIST',
+        "payload": {}
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, workername, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        REQUEST_BUFFERS.set(request_id, undefined)
+        wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
+            resolve('not_found')
         })
     });
     return promise
@@ -252,6 +339,7 @@ module.exports = {
     createNewEngine: createNewEngine,
     searchForEngine: searchForEngine,
     getWorkerList: getWorkerList,
+    getWorkerEngineList: getWorkerEngineList,
 
     createNewMonitoringActivity: createNewMonitoringActivity,
     getAggregatorList: getAggregatorList
