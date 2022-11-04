@@ -13,9 +13,11 @@ const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
 var BROKER = undefined
 
-const FREE_SLOT_WAITING_PERIOD = 500
+const FREE_SLOT_WAITING_PERIOD = 1500
 const ENGINE_SEARCH_WAITING_PERIOD = 500
 const ENGINE_PONG_WAITING_PERIOD = 500
+
+const PROCESS_SEARCH_WAITING_PERIOD = 500
 
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
@@ -73,6 +75,15 @@ function onMessageReceived(hostname, port, topic, message) {
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
                     REQUEST_PROMISES.get(msgJson['request_id'])(msgJson)
                     REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
+            }
+            case 'PROCESS_SEARCH_RESP': {
+                LOG.logSystem('DEBUG', `PROCESS_SEARCH message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    if (REQUEST_BUFFERS.has(msgJson['request_id'])) {
+                        REQUEST_BUFFERS.get(msgJson['request_id']).push(...msgJson['payload']['engines'])
+                    }
                 }
                 break;
             }
@@ -217,6 +228,49 @@ async function searchForEngine(engineid) {
     return promise
 }
 
+async function searchForProcess(processid) {
+    LOG.logSystem('DEBUG', `Searching for Process [${processid}]`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'PROCESS_SEARCH',
+        "payload": { "process_id": processid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        REQUEST_BUFFERS.set(request_id, [])
+        wait(PROCESS_SEARCH_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `searchForProcess waiting period elapsed`, module.id)
+            var result = REQUEST_BUFFERS.get(request_id) || []
+            REQUEST_PROMISES.delete(request_id)
+            REQUEST_BUFFERS.delete(request_id)
+
+            //Sorting the workers based on their name and adding index
+            result.sort((a, b) => {
+                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
+                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
+                if (nameA < nameB) {
+                    return -1;
+                }
+                if (nameA > nameB) {
+                    return 1;
+                }
+
+                // names must be equal
+                return 0;
+            });
+            var cnt = 1
+            result.forEach(element => {
+                element['index'] = cnt
+                cnt += 1
+            });
+            resolve(result)
+        })
+    });
+    return promise
+}
+
 /**
  * Returns the list of online Worker instances
  * @returns Returns a promise, which will contain the list of Workers after ENGINE_PONG_WAITING_PERIOD
@@ -338,6 +392,7 @@ module.exports = {
 
     createNewEngine: createNewEngine,
     searchForEngine: searchForEngine,
+    searchForProcess: searchForProcess,
     getWorkerList: getWorkerList,
     getWorkerEngineList: getWorkerEngineList,
 

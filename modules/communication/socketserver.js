@@ -10,7 +10,8 @@ module.id = 'SOCKET'
 //Front-end module keys
 const MODULE_SYSTEM_INFORMATION = 'system_information'
 const MODULE_OVERVIEW = 'overview'
-const MODULE_WORKER_DETAIL ='worker_detail'
+const MODULE_WORKER_DETAIL = 'worker_detail'
+const MODULE_ENGINES = 'process_search'
 
 
 var server = http.createServer(function (request, response) {
@@ -55,7 +56,7 @@ wsServer.on('request', function (request) {
         getSystemInformationModuleUpdate().then((data) => {
             connection.sendUTF(JSON.stringify(data))
         })
-        getOverviewModuleUpdate().then((data)=>{
+        getOverviewModuleUpdate().then((data) => {
             connection.sendUTF(JSON.stringify(data))
         })
     });
@@ -73,7 +74,7 @@ wsServer.on('request', function (request) {
     connection.on('close', function (reasonCode, description) {
         periodicUpdaterJob.cancel()
         console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-        
+
     });
 });
 
@@ -89,6 +90,8 @@ async function messageHandler(message) {
                 return getSystemInformationModuleUpdate()
             case 'worker_detail':
                 return getWorkerEngineList(msgObj['payload']['worker_name'])
+            case 'process_search':
+                return getProcessEngineList(msgObj['payload']['process_instance_id'])
         }
     }
     //return promise
@@ -136,7 +139,7 @@ async function getOverviewModuleUpdate() {
     return promise
 }
 
-async function getWorkerEngineList(workername){
+async function getWorkerEngineList(workername) {
     var promise = new Promise(async function (resolve, reject) {
         var engines = await MQTTCOMM.getWorkerEngineList(workername)
         console.log("ENGINES:")
@@ -144,6 +147,23 @@ async function getWorkerEngineList(workername){
         await Promise.all([engines])
         var response = {
             module: MODULE_WORKER_DETAIL,
+            payload: {
+                engines: engines,
+            }
+        }
+        resolve(response)
+    });
+    return promise
+}
+
+async function getProcessEngineList(process_instance_id) {
+    var promise = new Promise(async function (resolve, reject) {
+        var engines = await MQTTCOMM.searchForProcess(process_instance_id)
+        console.log("ENGINES:")
+        console.log(engines)
+        await Promise.all([engines])
+        var response = {
+            module: MODULE_ENGINES,
             payload: {
                 engines: engines,
             }
