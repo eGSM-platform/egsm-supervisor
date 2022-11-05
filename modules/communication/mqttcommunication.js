@@ -189,17 +189,17 @@ async function getFreeEngineSlot() {
  * @param {String} process_model 
  * @param {String} eventRouterConfig 
  */
-function createNewEngine(engineid, broker, informal_model, process_model, eventRouterConfig) {
+function createNewEngine(engineid, informal_model, process_model, eventRouterConfig) {
     LOG.logSystem('DEBUG', `createNewEngine function called with engine ID: [${engineid}]`, module.id)
     getFreeEngineSlot().then((value) => {
         if (value != 'no_response') {
             LOG.logSystem('DEBUG', `Free engine slot found on Worker: [${value}]`, module.id)
             var msgPayload = {
                 "engine_id": engineid,
-                "mqtt_broker": broker.host,
-                "mqtt_port": broker.port,
-                "mqtt_user": broker.username,
-                "mqtt_password": broker.password,
+                "mqtt_broker": BROKER.host,
+                "mqtt_port": BROKER.port,
+                "mqtt_user": BROKER.username,
+                "mqtt_password": BROKER.password,
                 "informal_model": informal_model,
                 "process_model": process_model,
                 "event_router_config": eventRouterConfig

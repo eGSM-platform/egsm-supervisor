@@ -2,7 +2,8 @@ var WebSocketServer = require('websocket').server;
 var http = require('http');
 const schedule = require('node-schedule');
 
-var LOG = require('../egsm-common/auxiliary/logManager')
+var LOG = require('../egsm-common/auxiliary/logManager');
+var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
 
 module.id = 'SOCKET'
@@ -12,6 +13,8 @@ const MODULE_SYSTEM_INFORMATION = 'system_information'
 const MODULE_OVERVIEW = 'overview'
 const MODULE_WORKER_DETAIL = 'worker_detail'
 const MODULE_ENGINES = 'process_search'
+const MODULE_PROCESS_LIBRARY = 'process_library'
+const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 
 
 var server = http.createServer(function (request, response) {
@@ -84,14 +87,22 @@ async function messageHandler(message) {
 
     if (msgObj['type'] == 'update_request') {
         switch (msgObj['module']) {
-            case 'overview':
+            case MODULE_OVERVIEW:
                 return getOverviewModuleUpdate()
-            case 'system_information':
+            case MODULE_SYSTEM_INFORMATION:
                 return getSystemInformationModuleUpdate()
-            case 'worker_detail':
+            case MODULE_WORKER_DETAIL:
                 return getWorkerEngineList(msgObj['payload']['worker_name'])
-            case 'process_search':
+            case MODULE_ENGINES:
                 return getProcessEngineList(msgObj['payload']['process_instance_id'])
+            case MODULE_PROCESS_LIBRARY:
+                return getProcessTypeList()
+        }
+    }
+    else if (msgObj['type'] == 'command') {
+        switch (msgObj['module']) {
+            case MODULE_NEW_PROCESS_INSTANCE:
+                return createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
         }
     }
     //return promise
@@ -159,8 +170,6 @@ async function getWorkerEngineList(workername) {
 async function getProcessEngineList(process_instance_id) {
     var promise = new Promise(async function (resolve, reject) {
         var engines = await MQTTCOMM.searchForProcess(process_instance_id)
-        console.log("ENGINES:")
-        console.log(engines)
         await Promise.all([engines])
         var response = {
             module: MODULE_ENGINES,
@@ -171,4 +180,60 @@ async function getProcessEngineList(process_instance_id) {
         resolve(response)
     });
     return promise
+}
+
+function getProcessTypeList() {
+    var promise = new Promise(async function (resolve, reject) {
+        var response = {
+            module: MODULE_PROCESS_LIBRARY,
+            payload: {
+                process_types: PROCESSLIB.getProcessTypeList(),
+            }
+        }
+        resolve(response)
+    });
+    return promise
+}
+
+async function createProcessInstance(process_type, instance_name, bpmnJob = false) {
+    var promise = new Promise(async function (resolve, reject) {
+        MQTTCOMM.searchForProcess(instance_name).then((result) => {
+            console.log("RESULT")
+            console.log(result)
+            if (result.length > 0) {
+                var response = {
+                    module: MODULE_NEW_PROCESS_INSTANCE,
+                    payload: {
+                        result: 'id_not_free',
+                    }
+                }
+                resolve(response)
+            }
+            else {
+                var processDetails = PROCESSLIB.getProcessType(process_type)
+                processDetails['perspectives'].forEach(element => {
+                    var engineName = process_type + '__' + instance_name + '__' + element['name']
+                    MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'])
+                    console.log('engine_created')
+                });
+
+                if (bpmnJob) {
+                    //TODO: Initiate BPMN job here
+                }
+                var response = {
+                    module: MODULE_NEW_PROCESS_INSTANCE,
+                    payload: {
+                        result: 'ok',
+                    }
+                }
+                resolve(response)
+            }
+        })
+
+    })
+    return promise
+}
+
+module.exports = {
+    createProcessInstance: createProcessInstance
 }
