@@ -78,6 +78,20 @@ function onMessageReceived(hostname, port, topic, message) {
                 }
                 break;
             }
+            case 'GET_COMPLETE_DIAGRAM_RESP':
+                LOG.logSystem('DEBUG', `GET_COMPLETE_DIAGRAM_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['payload']['result'])
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
+            case 'GET_COMPLETE_NODE_DIAGARM_RESP':
+                LOG.logSystem('DEBUG', `GET_COMPLETE_NODE_DIAGARM_RESP engine message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['payload']['result'])
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
             case 'PROCESS_SEARCH_RESP': {
                 LOG.logSystem('DEBUG', `PROCESS_SEARCH message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
@@ -386,6 +400,40 @@ function getWorkerEngineList(workername) {
     return promise
 }
 
+function getEngineCompleteDiagram(engineid) {
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'GET_COMPLETE_DIAGRAM',
+        "payload": { engine_id: engineid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
+            resolve('not_found')
+        })
+    });
+    return promise
+}
+
+function getEngineCompleteNodeDiagram(engineid) {
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'GET_COMPLETE_NODE_DIAGARM',
+        "payload": { engine_id: engineid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
+            resolve('not_found')
+        })
+    });
+    return promise
+}
+
 
 module.exports = {
     initBrokerConnection: initBrokerConnection,
@@ -397,5 +445,8 @@ module.exports = {
     getWorkerEngineList: getWorkerEngineList,
 
     createNewMonitoringActivity: createNewMonitoringActivity,
-    getAggregatorList: getAggregatorList
+    getAggregatorList: getAggregatorList,
+
+    getEngineCompleteDiagram: getEngineCompleteDiagram,
+    getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram
 }
