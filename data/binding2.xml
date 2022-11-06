@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<martifact:definitions xmlns:martifact="http://foo.bar.it/martifact" id="Definitions_1">
+    <martifact:mapping>
+        <martifact:artifact name="Truck">
+            <martifact:bindingEvent id="truck_process_start" />
+            <martifact:bindingEvent id="truck_process_start2" />
+            <martifact:unbindingEvent id="truck_process_end" />
+        </martifact:artifact>
+        <martifact:artifact name="Train">
+            <martifact:bindingEvent id="train_process_start" />
+            <martifact:unbindingEvent id="train_process_end" />
+        </martifact:artifact>
+    </martifact:mapping>
+    <martifact:stakeholder name="Carrier" processInstance="c2"></martifact:stakeholder>
+    <martifact:stakeholder name="Shipper" processInstance="s2"></martifact:stakeholder>
+</martifact:definitions>

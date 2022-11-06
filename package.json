@@ -1,0 +1,31 @@
+{
+  "name": "egsm-supervisor",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/szabolcsgarda/egsm-supervisor.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/szabolcsgarda/egsm-supervisor/issues"
+  },
+  "homepage": "https://github.com/szabolcsgarda/egsm-supervisor#readme",
+  "dependencies": {
+    "axios": "^0.27.2",
+    "body-parser": "^1.20.0",
+    "express": "^4.18.1",
+    "form-data": "^4.0.0",
+    "http": "^0.0.1-security",
+    "mqtt": "^4.3.7",
+    "multer": "^1.4.5-lts.1",
+    "node-rest-client": "^3.1.1",
+    "node-schedule": "^2.1.0",
+    "websocket": "^1.0.34"
+  },
+  "description": ""
+}
