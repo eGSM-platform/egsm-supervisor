@@ -12,6 +12,9 @@ var PROCESS_TYPE_NUMBER = 0
 var PROCESS_TYPES = new Map()
 
 
+/**
+ * Loads all Proccess Types from the LIBRARY_FOLDER
+ */
 function loadProcessTypes() {
     LOG.logSystem('DEBUG', 'Loading Process Library', module.id)
     var index = 1
@@ -42,7 +45,6 @@ function loadProcessTypes() {
 
                     //Iterating through perspectives
                     process_config['perspective'].forEach(element => {
-                        console.log(element)
                         perspectives.push({
                             name: element['name'][0],
                             egsm_model: fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['egsm-model'][0], 'utf8'),
@@ -60,7 +62,6 @@ function loadProcessTypes() {
                 })
             } catch (err) {
                 LOG.logSystem('FATAL', `Error while reading initialization file: ${err}`, module.id)
-                return
             }
 
             PROCESS_TYPE_NUMBER += 1
@@ -72,6 +73,10 @@ function loadProcessTypes() {
     LOG.logSystem('DEBUG', 'Process Library loaded', module.id)
 }
 
+/**
+ * 
+ * @returns A list of available Process types, containing their names and description
+ */
 function getProcessTypeList() {
     var result = []
     for (let [key, value] of PROCESS_TYPES) {
@@ -83,6 +88,11 @@ function getProcessTypeList() {
     return result
 }
 
+/**
+ * Gets a Process Type definition from the module specified by process_type_name
+ * @param {*} process_type_name ID of the Process Type
+ * @returns Returns an object containing all relevant data to the Process Type
+ */
 function getProcessType(process_type_name) {
     if (PROCESS_TYPES.has(process_type_name)) {
         return PROCESS_TYPES.get(process_type_name)
@@ -96,5 +106,4 @@ module.exports = {
     loadProcessTypes: loadProcessTypes,
     getProcessTypeList: getProcessTypeList,
     getProcessType: getProcessType,
-
 }

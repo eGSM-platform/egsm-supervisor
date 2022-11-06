@@ -104,7 +104,6 @@ function onMessageReceived(hostname, port, topic, message) {
             case 'GET_ENGINE_LIST_RESP': {
                 LOG.logSystem('DEBUG', `GET_ENGINE_LIST_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
-                    console.log(msgJson)
                     REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['payload'])
                     REQUEST_PROMISES.delete(msgJson['request_id'])
                 }
@@ -242,6 +241,11 @@ async function searchForEngine(engineid) {
     return promise
 }
 
+/**
+ * Finds Engine instances part of a Process instance
+ * @param {*} processid Instance ID of the process
+ * @returns Promise will contain an array of Engines sorted
+ */
 async function searchForProcess(processid) {
     LOG.logSystem('DEBUG', `Searching for Process [${processid}]`, module.id)
     var request_id = UUID.v4();
@@ -382,6 +386,11 @@ async function getAggregatorList() {
     return promise
 }
 
+/**
+ * Get the list of Engines deployed on a specified Worker
+ * @param {*} workername 
+ * @returns 
+ */
 function getWorkerEngineList(workername) {
     var request_id = UUID.v4();
     var message = {
@@ -400,6 +409,11 @@ function getWorkerEngineList(workername) {
     return promise
 }
 
+/**
+ * Get eGSM model to visualize on Front end
+ * @param {*} engineid 
+ * @returns 
+ */
 function getEngineCompleteDiagram(engineid) {
     var request_id = UUID.v4();
     var message = {
@@ -417,6 +431,11 @@ function getEngineCompleteDiagram(engineid) {
     return promise
 }
 
+/**
+ * Get eGSM model to visualize on Front end
+ * @param {*} engineid 
+ * @returns 
+ */
 function getEngineCompleteNodeDiagram(engineid) {
     var request_id = UUID.v4();
     var message = {
