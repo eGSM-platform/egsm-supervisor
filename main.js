@@ -29,7 +29,7 @@ if (process.argv.length == 3) {
             }
             config = result
             LOG.logSystem('DEBUG', 'Applying configurations', module.id)
-            AUTOCONFIG.applyConfig(config)
+            AUTOCONFIG.applyBasicConfig(config)
         })
     } catch (err) {
         LOG.logSystem('FATAL', `Error while reading initialization file: ${err}`, module.id)
@@ -49,8 +49,12 @@ else if (process.argv.length > 3) {
     return
 }
 
-//NOTO: Multi-Broker supervising is not supported yet, so only the first broker passed as argument in this function
+//NOTE: Multi-Broker supervising is not supported yet, so only the first broker passed as argument in this function
 MQTTCOMM.initBrokerConnection(RESOURCEMAN.getBrokers()[0])
+
+if(config){
+    AUTOCONFIG.applyAdvancedConfig(config)
+}
 
 process.on('SIGINT', () => {
     LOG.logSystem('DEBUG', 'SIGINT signal caught. Shutting down supervisor...', module.id)

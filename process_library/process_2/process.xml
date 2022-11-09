@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <process-type>
-    <name>Inland Transportation Process Complex</name>
+    <name>Inland_Transportation_Process_Complex</name>
     <description>The process describes the inland transportation of a container by truck and train</description>
 
     <bpmn-model>

@@ -1,18 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <process-type>
-    <name>Inland_Transportation_Process_Simple</name>
-    <description>The process describes the inland transportation of a container by truck</description>
+    <name>Inland_Transportation_Process_Single_Perspective</name>
+    <description>The process describes the inland transportation of a container</description>
 
     <bpmn-model>
         <model>models/process.bpmn</model>
     </bpmn-model>
-
-    <perspective>
-        <name>Truck</name>
-        <egsm-model>models/egsm_truck.xml</egsm-model>
-        <info-model>models/info_truck.xsd</info-model>
-        <bindings>models/binding_truck.xml</bindings>
-    </perspective>
 
     <perspective>
         <name>Container</name>

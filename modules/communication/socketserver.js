@@ -9,7 +9,7 @@ var MQTTCOMM = require('./mqttcommunication')
 module.id = 'SOCKET'
 
 const SOCKET_PORT = 8080
-const OVERVIEW_UPDATE_PERIOD = 10 //Update period of Overview and System Information module in secs
+const OVERVIEW_UPDATE_PERIOD = 5 //Update period of Overview and System Information module in secs
 
 //Front-end module keys
 const MODULE_SYSTEM_INFORMATION = 'system_information'
@@ -223,7 +223,7 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
             else {
                 var processDetails = PROCESSLIB.getProcessType(process_type)
                 processDetails['perspectives'].forEach(element => {
-                    var engineName = process_type + '__' + instance_name + '__' + element['name']
+                    var engineName = process_type + '/' + instance_name + '__' + element['name']
                     MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'])
                 });
 

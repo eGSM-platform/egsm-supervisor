@@ -13,11 +13,11 @@ const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
 var BROKER = undefined
 
-const FREE_SLOT_WAITING_PERIOD = 1500
-const ENGINE_SEARCH_WAITING_PERIOD = 500
+const FREE_SLOT_WAITING_PERIOD = 1000
+const ENGINE_SEARCH_WAITING_PERIOD = 100
 const ENGINE_PONG_WAITING_PERIOD = 500
 
-const PROCESS_SEARCH_WAITING_PERIOD = 500
+const PROCESS_SEARCH_WAITING_PERIOD = 100
 
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
@@ -347,7 +347,7 @@ function createNewMonitoringActivity() {
  */
 async function getAggregatorList() {
     LOG.logSystem('DEBUG', `getAggregatorList function called`, module.id)
-    var request_id = 'random' //TODO UUID.v4();
+    var request_id = UUID.v4();
     var message = {
         "request_id": request_id,
         "message_type": 'PING'
