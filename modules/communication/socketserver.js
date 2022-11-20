@@ -93,7 +93,7 @@ async function messageHandler(message) {
     else if (msgObj['type'] == 'command') {
         switch (msgObj['module']) {
             case MODULE_NEW_PROCESS_INSTANCE:
-                return createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
+                return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
         }
     }
 }
@@ -210,33 +210,40 @@ function getProcessTypeList() {
  */
 async function createProcessInstance(process_type, instance_name, bpmnJob = false) {
     var promise = new Promise(async function (resolve, reject) {
-        MQTTCOMM.searchForProcess(instance_name).then((result) => {
-            if (result.length > 0) {
-                var response = {
-                    module: MODULE_NEW_PROCESS_INSTANCE,
-                    payload: {
-                        result: 'id_not_free',
-                    }
+        MQTTCOMM.searchForProcess(instance_name).then(async (result) => {
+            var response = {
+                module: MODULE_NEW_PROCESS_INSTANCE,
+                payload: {
+                    result: 'backend_error',
                 }
+            }
+            if (result.length > 0) {
+                response.payload.result = "id_not_free"
                 resolve(response)
             }
             else {
                 var processDetails = PROCESSLIB.getProcessType(process_type)
-                processDetails['perspectives'].forEach(element => {
+                //var promises = []
+                var creation_results = []
+                processDetails['perspectives'].forEach(async element => {
                     var engineName = process_type + '/' + instance_name + '__' + element['name']
-                    MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'])
+                    creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings']))
                 });
 
-                if (bpmnJob) {
-                    //TODO: Initiate BPMN job here
-                }
-                var response = {
-                    module: MODULE_NEW_PROCESS_INSTANCE,
-                    payload: {
-                        result: 'ok',
+
+                await Promise.all(creation_results).then((promise_array) =>{
+                    promise_array.forEach(element => {
+                        if (element != "created") {
+                            response.payload.result = "backend_error"
+                            resolve(response)
+                        }
+                    });
+                    if (bpmnJob) {
+                        //TODO: Initiate BPMN job here
                     }
-                }
-                resolve(response)
+                    response.payload.result = "ok"
+                    resolve(response)
+                })
             }
         })
     })

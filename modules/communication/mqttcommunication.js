@@ -13,7 +13,7 @@ const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
 var BROKER = undefined
 
-const FREE_SLOT_WAITING_PERIOD = 1000
+const FREE_SLOT_WAITING_PERIOD = 250
 const ENGINE_SEARCH_WAITING_PERIOD = 100
 const ENGINE_PONG_WAITING_PERIOD = 500
 
@@ -45,11 +45,8 @@ function onMessageReceived(hostname, port, topic, message) {
         switch (msgJson['message_type']) {
             case 'NEW_ENGINE_SLOT_RESP': {
                 LOG.logSystem('DEBUG', `NEW_ENGINE_SLOT_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
-                //Here several messages are expected and only the fastest one will be handled
-                //All the further messages will be neglected
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
-                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['sender_id'])
-                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                    REQUEST_BUFFERS.get(msgJson['request_id']).push({ sender_id: msgJson['sender_id'], free_slots: msgJson['free_slots'] })
                 }
                 break;
             }
@@ -171,11 +168,30 @@ async function getFreeEngineSlot() {
     }
     MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
 
-    var promise = new Promise(function (resolve, reject) {
+    var promise = new Promise(async function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
-        wait(FREE_SLOT_WAITING_PERIOD).then(() => {
+        REQUEST_BUFFERS.set(request_id, [])
+        await wait(FREE_SLOT_WAITING_PERIOD)
+        LOG.logSystem('DEBUG', `getFreeEngineSlot waiting period elapsed`, module.id)
+        var result = REQUEST_BUFFERS.get(request_id) || []
+        console.log("WORKERS:" + result)
+        REQUEST_PROMISES.delete(request_id)
+        REQUEST_BUFFERS.delete(request_id)
+        if (result.length == 0) {
             resolve('no_response')
-        })
+        }
+        else {
+            //Selecting the worker with the most free slots
+            var maxSlots = 0
+            var selected = "no_response"
+            result.forEach(element => {
+                if(element.free_slots > maxSlots){
+                    maxSlots = element.free_slots
+                    selected = element.sender_id
+                }
+            });
+            resolve(selected)
+        }
     });
     return promise
 }
@@ -190,31 +206,36 @@ async function getFreeEngineSlot() {
  */
 function createNewEngine(engineid, informal_model, process_model, eventRouterConfig) {
     LOG.logSystem('DEBUG', `createNewEngine function called with engine ID: [${engineid}]`, module.id)
-    getFreeEngineSlot().then((value) => {
-        if (value != 'no_response') {
-            LOG.logSystem('DEBUG', `Free engine slot found on Worker: [${value}]`, module.id)
-            var msgPayload = {
-                "engine_id": engineid,
-                "mqtt_broker": BROKER.host,
-                "mqtt_port": BROKER.port,
-                "mqtt_user": BROKER.username,
-                "mqtt_password": BROKER.password,
-                "informal_model": informal_model,
-                "process_model": process_model,
-                "event_router_config": eventRouterConfig
+    var promise = new Promise(function (resolve, reject) {
+        getFreeEngineSlot().then((value) => {
+            if (value != 'no_response') {
+                LOG.logSystem('DEBUG', `Free engine slot found on Worker: [${value}]`, module.id)
+                var msgPayload = {
+                    "engine_id": engineid,
+                    "mqtt_broker": BROKER.host,
+                    "mqtt_port": BROKER.port,
+                    "mqtt_user": BROKER.username,
+                    "mqtt_password": BROKER.password,
+                    "informal_model": informal_model,
+                    "process_model": process_model,
+                    "event_router_config": eventRouterConfig
+                }
+                var requestId = UUID.v4();
+                var message = {
+                    request_id: requestId,
+                    message_type: 'NEW_ENGINE',
+                    payload: msgPayload
+                }
+                MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
+                resolve("created")
             }
-            var requestId = UUID.v4();
-            var message = {
-                request_id: requestId,
-                message_type: 'NEW_ENGINE',
-                payload: msgPayload
+            else {
+                LOG.logSystem('WARNING', `No free engine slot found`, module.id)
+                resolve("no_free_slot")
             }
-            MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
-        }
-        else {
-            LOG.logSystem('WARNING', `No free engine slot found`, module.id)
-        }
+        })
     })
+    return promise
 }
 
 /**

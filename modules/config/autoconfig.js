@@ -31,8 +31,7 @@ async function applyAdvancedConfig(config) {
         for (var index = 0; index < quantity; index++) {
             var instanceName = instanceNamePrefix + (index + 1).toString()
             console.log(index)
-            SOCKET.createProcessInstance(processType, instanceName, bpmnJob)
-            await AUX.sleep(PROCESS_CREATION_TIMEOUT)
+            await SOCKET.createProcessInstance(processType, instanceName, bpmnJob)
         }
 
         if (bpmnJob) {
