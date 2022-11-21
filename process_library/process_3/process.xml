@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<process-type>
+    <name>Inland_Transportation_Process_Single_Perspective</name>
+    <description>The process describes the inland transportation of a container</description>
+
+    <bpmn-model>
+        <model>models/process.bpmn</model>
+    </bpmn-model>
+
+    <perspective>
+        <name>Container</name>
+        <egsm-model>models/egsm_container.xml</egsm-model>
+        <info-model>models/info_container.xsd</info-model>
+        <bindings>models/binding_container.xml</bindings>
+    </perspective>
+</process-type>

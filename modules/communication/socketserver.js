@@ -2,16 +2,22 @@ var WebSocketServer = require('websocket').server;
 var http = require('http');
 const schedule = require('node-schedule');
 
-var LOG = require('../egsm-common/auxiliary/logManager')
+var LOG = require('../egsm-common/auxiliary/logManager');
+var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
 
 module.id = 'SOCKET'
+
+const SOCKET_PORT = 8080
+const OVERVIEW_UPDATE_PERIOD = 5 //Update period of Overview and System Information module in secs
 
 //Front-end module keys
 const MODULE_SYSTEM_INFORMATION = 'system_information'
 const MODULE_OVERVIEW = 'overview'
 const MODULE_WORKER_DETAIL = 'worker_detail'
 const MODULE_ENGINES = 'process_search'
+const MODULE_PROCESS_LIBRARY = 'process_library'
+const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 
 
 var server = http.createServer(function (request, response) {
@@ -19,40 +25,32 @@ var server = http.createServer(function (request, response) {
     response.writeHead(404);
     response.end();
 });
-server.listen(8080, function () {
-    console.log(' Server is listening on port 8080');
+server.listen(SOCKET_PORT, function () {
+    LOG.logSystem('DEBUG', `Socket Server is listening on port ${SOCKET_PORT}`, module.id)
 });
 
 wsServer = new WebSocketServer({
     httpServer: server,
-    // You should not use autoAcceptConnections for production
-    // applications, as it defeats all standard cross-origin protection
-    // facilities built into the protocol and the browser.  You should
-    // *always* verify the connection's origin and decide whether or not
-    // to accept it.
     autoAcceptConnections: false
 });
 
 function originIsAllowed(origin) {
-    // put logic here to detect whether the specified origin is allowed.
     return true;
 }
 
 wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
-        // Make sure we only accept requests from an allowed origin
         request.reject();
-        console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
+        LOG.logSystem('DEBUG', `Connection from origin ${request.origin} rejected`, module.id)
         return;
     }
 
     var connection = request.accept('data-connection', request.origin);
-    console.log((new Date()) + ' Connection accepted.');
+    LOG.logSystem('DEBUG', `Connection from origin ${request.origin} accepted`, module.id)
 
-    const periodicUpdaterJob = schedule.scheduleJob(' */5 * * * * *', function () {
-
-        //Update overview module
-        console.log('Sending update');
+    //Update System Information and Overview module periodically
+    const periodicUpdaterJob = schedule.scheduleJob(` */${OVERVIEW_UPDATE_PERIOD} * * * * *`, function () {
+        LOG.logSystem('DEBUG', `Sending update to Overview and System Information module`, module.id)
         getSystemInformationModuleUpdate().then((data) => {
             connection.sendUTF(JSON.stringify(data))
         })
@@ -61,11 +59,9 @@ wsServer.on('request', function (request) {
         })
     });
 
-
     connection.on('message', function (message) {
-        //console.log('Received: ' + JSON.parse(message.utf8Data))
+        LOG.logSystem('DEBUG', `Message received`, module.id)
         messageHandler(message.utf8Data).then((data) => {
-            console.log(JSON.stringify(data))
             connection.sendUTF(JSON.stringify(data))
         })
 
@@ -73,31 +69,39 @@ wsServer.on('request', function (request) {
 
     connection.on('close', function (reasonCode, description) {
         periodicUpdaterJob.cancel()
-        console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-
+        LOG.logSystem('DEBUG', `Peer ${connection.remoteAddress} disconnected`, module.id)
     });
 });
 
 async function messageHandler(message) {
-    var response = undefined
     var msgObj = JSON.parse(JSON.parse(message))
 
     if (msgObj['type'] == 'update_request') {
         switch (msgObj['module']) {
-            case 'overview':
+            case MODULE_OVERVIEW:
                 return getOverviewModuleUpdate()
-            case 'system_information':
+            case MODULE_SYSTEM_INFORMATION:
                 return getSystemInformationModuleUpdate()
-            case 'worker_detail':
+            case MODULE_WORKER_DETAIL:
                 return getWorkerEngineList(msgObj['payload']['worker_name'])
-            case 'process_search':
+            case MODULE_ENGINES:
                 return getProcessEngineList(msgObj['payload']['process_instance_id'])
+            case MODULE_PROCESS_LIBRARY:
+                return getProcessTypeList()
         }
     }
-    //return promise
+    else if (msgObj['type'] == 'command') {
+        switch (msgObj['module']) {
+            case MODULE_NEW_PROCESS_INSTANCE:
+                return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
+        }
+    }
 }
 
-//MODULE_SYSTEM_INFORMATION
+/**
+ * Handles update equests from MODULE_SYSTEM_INFORMATION
+ * @returns Promise containing the response message
+ */
 async function getSystemInformationModuleUpdate() {
     var promise = new Promise(async function (resolve, reject) {
         var workers = await MQTTCOMM.getWorkerList()
@@ -112,13 +116,15 @@ async function getSystemInformationModuleUpdate() {
                 aggregator_number: aggregators.length,
             }
         }
-        console.log('Response:' + response)
-        console.log(JSON.stringify(workers))
         resolve(response)
     });
     return promise
 }
 
+/**
+ * Handles update requests from MODULE_OVERVIEW
+ * @returns Promise containing the response message
+ */
 async function getOverviewModuleUpdate() {
     var promise = new Promise(async function (resolve, reject) {
         var workers = await MQTTCOMM.getWorkerList()
@@ -132,18 +138,19 @@ async function getOverviewModuleUpdate() {
                 aggregators: aggregators,
             }
         }
-        console.log('Response:' + response)
-        console.log(JSON.stringify(workers))
         resolve(response)
     });
     return promise
 }
 
+/**
+ * Returns the array of engines deployed on the Worker specified as argument
+ * @param {String} workername 
+ * @returns Promise will contain array of Engines (empty array in case of no engine)
+ */
 async function getWorkerEngineList(workername) {
     var promise = new Promise(async function (resolve, reject) {
         var engines = await MQTTCOMM.getWorkerEngineList(workername)
-        console.log("ENGINES:")
-        console.log(engines)
         await Promise.all([engines])
         var response = {
             module: MODULE_WORKER_DETAIL,
@@ -156,11 +163,14 @@ async function getWorkerEngineList(workername) {
     return promise
 }
 
+/**
+ * Returns the array of engines related to the process specified by the argument
+ * @param {*} process_instance_id Process instance ID (NOT ENGINE ID)
+ * @returns  Promise will contain array of Engines (empty array in case of no engine)
+ */
 async function getProcessEngineList(process_instance_id) {
     var promise = new Promise(async function (resolve, reject) {
         var engines = await MQTTCOMM.searchForProcess(process_instance_id)
-        console.log("ENGINES:")
-        console.log(engines)
         await Promise.all([engines])
         var response = {
             module: MODULE_ENGINES,
@@ -171,4 +181,75 @@ async function getProcessEngineList(process_instance_id) {
         resolve(response)
     });
     return promise
+}
+
+/**
+ * Get list of available Process Type definitions
+ * @returns Array of Process types
+ */
+function getProcessTypeList() {
+    var promise = new Promise(async function (resolve, reject) {
+        var response = {
+            module: MODULE_PROCESS_LIBRARY,
+            payload: {
+                process_types: PROCESSLIB.getProcessTypeList(),
+            }
+        }
+        resolve(response)
+    });
+    return promise
+}
+
+/**
+ * Creates a new Process Instance. It will create at least one eGSM engines on random Workers
+ * If the process has multiple perspectives, it will create multiple eGSM engines (maybe not on the same Worker)
+ * @param {String} process_type Type of the process (need to be defined in the library module in advance)
+ * @param {String} instance_name Process instance name
+ * @param {Boolean} bpmnJob True if creation of BPMN Model Job is required
+ * @returns Promise will become 'ok' if the creation was successfull 'id_not_free' if the ID is already used
+ */
+async function createProcessInstance(process_type, instance_name, bpmnJob = false) {
+    var promise = new Promise(async function (resolve, reject) {
+        MQTTCOMM.searchForProcess(instance_name).then(async (result) => {
+            var response = {
+                module: MODULE_NEW_PROCESS_INSTANCE,
+                payload: {
+                    result: 'backend_error',
+                }
+            }
+            if (result.length > 0) {
+                response.payload.result = "id_not_free"
+                resolve(response)
+            }
+            else {
+                var processDetails = PROCESSLIB.getProcessType(process_type)
+                //var promises = []
+                var creation_results = []
+                processDetails['perspectives'].forEach(async element => {
+                    var engineName = process_type + '/' + instance_name + '__' + element['name']
+                    creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings']))
+                });
+
+
+                await Promise.all(creation_results).then((promise_array) =>{
+                    promise_array.forEach(element => {
+                        if (element != "created") {
+                            response.payload.result = "backend_error"
+                            resolve(response)
+                        }
+                    });
+                    if (bpmnJob) {
+                        //TODO: Initiate BPMN job here
+                    }
+                    response.payload.result = "ok"
+                    resolve(response)
+                })
+            }
+        })
+    })
+    return promise
+}
+
+module.exports = {
+    createProcessInstance: createProcessInstance
 }
