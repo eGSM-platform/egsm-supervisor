@@ -15,7 +15,7 @@ const OVERVIEW_UPDATE_PERIOD = 5 //Update period of Overview and System Informat
 const MODULE_SYSTEM_INFORMATION = 'system_information'
 const MODULE_OVERVIEW = 'overview'
 const MODULE_WORKER_DETAIL = 'worker_detail'
-const MODULE_ENGINES = 'process_search'
+const MODULE_ENGINES = 'process_operation'
 const MODULE_PROCESS_LIBRARY = 'process_library'
 const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 
@@ -94,6 +94,8 @@ async function messageHandler(message) {
         switch (msgObj['module']) {
             case MODULE_NEW_PROCESS_INSTANCE:
                 return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
+            case MODULE_ENGINES:
+                return deleteProcessInstance(msgObj['payload']['process_instance_id'])
         }
     }
 }
@@ -175,10 +177,25 @@ async function getProcessEngineList(process_instance_id) {
         var response = {
             module: MODULE_ENGINES,
             payload: {
-                engines: engines,
+                engines: engines
             }
         }
         resolve(response)
+    });
+    return promise
+}
+
+async function deleteProcessInstance(process_instance_id) {
+    var promise = new Promise(async function (resolve, reject) {
+        MQTTCOMM.deleteProcess(process_instance_id).then((result) => {
+            var response = {
+                module: MODULE_ENGINES,
+                payload: {
+                    delete_result: result,
+                }
+            }
+            resolve(response)
+        })
     });
     return promise
 }
@@ -231,7 +248,7 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                 });
 
 
-                await Promise.all(creation_results).then((promise_array) =>{
+                await Promise.all(creation_results).then((promise_array) => {
                     promise_array.forEach(element => {
                         if (element != "created") {
                             response.payload.result = "backend_error"
