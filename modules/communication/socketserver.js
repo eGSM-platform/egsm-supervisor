@@ -1,3 +1,7 @@
+/**
+ * Interface for the frontend application
+ * The module starts a websocket server the frontend application can connect to, all communication is happening through this
+ */
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 const schedule = require('node-schedule');
@@ -9,7 +13,7 @@ var MQTTCOMM = require('./mqttcommunication')
 module.id = 'SOCKET'
 
 const SOCKET_PORT = 8080
-const OVERVIEW_UPDATE_PERIOD = 5 //Update period of Overview and System Information module in secs
+const OVERVIEW_UPDATE_PERIOD = 5 //Update period in secs of Overview and System Information frontend modules
 
 //Front-end module keys
 const MODULE_SYSTEM_INFORMATION = 'system_information'
@@ -19,7 +23,9 @@ const MODULE_ENGINES = 'process_operation'
 const MODULE_PROCESS_LIBRARY = 'process_library'
 const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 
-
+/**
+ * The websocket server
+ */
 var server = http.createServer(function (request, response) {
     LOG.logSystem('DEBUG', 'Received request', module.id)
     response.writeHead(404);
@@ -73,6 +79,12 @@ wsServer.on('request', function (request) {
     });
 });
 
+/**
+ * Main messagehandler function
+ * Calls the necessary functions the execute the requests
+ * @param {Object} message Message object from frontend 
+ * @returns A promise to the response message
+ */
 async function messageHandler(message) {
     var msgObj = JSON.parse(JSON.parse(message))
 
@@ -101,7 +113,7 @@ async function messageHandler(message) {
 }
 
 /**
- * Handles update equests from MODULE_SYSTEM_INFORMATION
+ * Handles update requests from MODULE_SYSTEM_INFORMATION
  * @returns Promise containing the response message
  */
 async function getSystemInformationModuleUpdate() {
@@ -185,6 +197,11 @@ async function getProcessEngineList(process_instance_id) {
     return promise
 }
 
+/**
+ * Deletes all engines belonging to the specified process instance
+ * @param {string} process_instance_id 
+ * @returns Promise to the result of the operation
+ */
 async function deleteProcessInstance(process_instance_id) {
     var promise = new Promise(async function (resolve, reject) {
         MQTTCOMM.deleteProcess(process_instance_id).then((result) => {
@@ -202,7 +219,7 @@ async function deleteProcessInstance(process_instance_id) {
 
 /**
  * Get list of available Process Type definitions
- * @returns Array of Process types
+ * @returns Promise to the array of Process types
  */
 function getProcessTypeList() {
     var promise = new Promise(async function (resolve, reject) {
@@ -247,7 +264,6 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                     creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings']))
                 });
 
-
                 await Promise.all(creation_results).then((promise_array) => {
                     promise_array.forEach(element => {
                         if (element != "created") {
@@ -267,6 +283,8 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
     return promise
 }
 
+// NOTE: Most functions of the module are intended to use internally only, although some functions are
+// exposed for auxiliary modules (e.g.: autoconfig) to avoid code duplication
 module.exports = {
     createProcessInstance: createProcessInstance
 }

@@ -1,12 +1,23 @@
+/**
+ * Module intended to store and handle resources the supervisor needs to use
+ */
+
 var LOG = require('../egsm-common/auxiliary/logManager')
 var PRIM = require('../egsm-common/auxiliary/primitives')
-
 
 module.id = 'RESOURCEMAN'
 
 //Global Variables
 var BROKERS = [] //List of brokers (and their credentials)
 
+/**
+ * Adding a new MQTT broker to the collection
+ * @param {string} host 
+ * @param {string} port 
+ * @param {string} username 
+ * @param {string} password 
+ * @returns 
+ */
 function registerBroker(host, port, username, password) {
     LOG.logSystem('DEBUG', `registerBroker function called [${host}]:[${port}]`, module.id)
     BROKERS.forEach(item => {
@@ -20,6 +31,10 @@ function registerBroker(host, port, username, password) {
     return true
 }
 
+/**
+ * Get all registered MQTT brokers
+ * @returns List of registered MQTT brokers
+ */
 function getBrokers(){
     return BROKERS
 }

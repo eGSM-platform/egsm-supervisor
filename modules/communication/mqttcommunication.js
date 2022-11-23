@@ -1,3 +1,7 @@
+/**
+ * Module implements high-level functions for MQTT-based communication with other parts of the architecture
+ */
+
 var UUID = require("uuid");
 
 var MQTT = require('../egsm-common/communication/mqttconnector')
@@ -13,23 +17,23 @@ const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
 var BROKER = undefined
 
+//Waiting periods for different operation types
 const FREE_SLOT_WAITING_PERIOD = 250
 const ENGINE_SEARCH_WAITING_PERIOD = 500
 const ENGINE_PONG_WAITING_PERIOD = 500
-
 const PROCESS_SEARCH_WAITING_PERIOD = 500
-
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
-var REQUEST_PROMISES = new Map() //Request id -> resolve references
-var REQUEST_BUFFERS = new Map() //Request id -> Usage specific storage place (used only for specific type of requests)
+//Containers to store pending requests and store replies in case of multi-party cooperation
+var REQUEST_PROMISES = new Map() // Request id -> resolve references
+var REQUEST_BUFFERS = new Map() // Request id -> Usage specific storage place (used only for specific type of requests)
 
 module.id = 'MQTTCOMM'
 
 /*Message body may contain:
 -sender_type: WORKER/AGGREGATOR
 -sender_id: <string>
--message_type: PONG/PING/NEW_WORKER/NEW_ENGINE_SLOT/NEW_ENGINE_SLOT_RESP/NEW_ENGINE/SEARCH
+-message_type: PONG/PING/NEW_WORKER/NEW_ENGINE_SLOT/NEW_ENGINE_SLOT_RESP/NEW_ENGINE/SEARCH/...
 -request_id: <string> (optional if no response expected)
 -payload: <string>
 */
@@ -41,6 +45,7 @@ module.id = 'MQTTCOMM'
 function onMessageReceived(hostname, port, topic, message) {
     LOG.logSystem('DEBUG', 'onMessageReceived function called', module.id)
     var msgJson = JSON.parse(message.toString())
+    //Messages from the Workers
     if (topic == TOPIC_IN_WORKER) {
         switch (msgJson['message_type']) {
             case 'NEW_ENGINE_SLOT_RESP': {
@@ -115,6 +120,7 @@ function onMessageReceived(hostname, port, topic, message) {
             }
         }
     }
+    //Messages from the Aggregators
     else if (topic == TOPIC_IN_AGGREGATOR) {
         switch (msgJson['message_type']) {
             case 'PONG': {
@@ -135,13 +141,10 @@ function onMessageReceived(hostname, port, topic, message) {
             }
         }
     }
-    else {
-
-    }
 }
 
 /**
- * Inits mqqt broker connection and subscribes to the necessary topics to start operation
+ * Inits MQTT broker connection and subscribes to the necessary topics to start operation
  * @param {Broker} broker Broker the supervisor should use to reach out to the managed workers and aggregators
  */
 function initBrokerConnection(broker) {
@@ -167,6 +170,7 @@ async function wait(delay) {
  * Intended to find a free engine slot on any worker instance
  * @returns Returns with a promise whose value will be 'no_response' in case of no free slot found and 
  * it will contain the ID of a Worker with a free slot otherwise
+ * If more than one response arrived (multiple Workers has free slot) then the function will choose the one with the most free slots
  */
 async function getFreeEngineSlot() {
     var request_id = UUID.v4();
@@ -317,6 +321,11 @@ async function searchForProcess(processid) {
     return promise
 }
 
+/**
+ * Delete a specified engine
+ * @param {string} engineid 
+ * @returns A promise to the result of the operaton. Will contain Worker defined content or "delete_error" in case of no Worker response
+ */
 async function deleteEngine(engineid) {
     LOG.logSystem('DEBUG', `deleteEngine called for [${engineid}]`, module.id)
     var request_id = UUID.v4();
@@ -336,6 +345,11 @@ async function deleteEngine(engineid) {
     return promise
 }
 
+/**
+ * Deletes all engines belongs to the specified Process Instance
+ * @param {string} processid 
+ * @returns A promise to the operation result. Will contain "ok", or "error" (considered to be error if not all engines has been verified to be removed)
+ */
 async function deleteProcess(processid) {
     var promise = new Promise(async function (resolve, reject) {
         searchForProcess(processid).then(async (engines) => {
@@ -402,63 +416,12 @@ async function getWorkerList() {
     return promise
 }
 
-
-//Aggregator-related functions
-function createNewMonitoringActivity() {
-    //TODO
-}
-
-/**
- * Returns the list of online Aggregator instances
- * @returns Returns a promise, which will contain the list of Aggregator after AGGREGATOR_PONG_WAITING_PERIOD
- */
-async function getAggregatorList() {
-    LOG.logSystem('DEBUG', `getAggregatorList function called`, module.id)
-    var request_id = UUID.v4();
-    var message = {
-        "request_id": request_id,
-        "message_type": 'PING'
-    }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
-    var promise = new Promise(function (resolve, reject) {
-        REQUEST_PROMISES.set(request_id, resolve)
-        REQUEST_BUFFERS.set(request_id, [])
-        wait(AGGREGATOR_PONG_WAITING_PERIOD).then(() => {
-            LOG.logSystem('DEBUG', `getAggregatorList waiting period elapsed`, module.id)
-            var result = REQUEST_BUFFERS.get(request_id) || []
-            REQUEST_PROMISES.delete(request_id)
-            REQUEST_BUFFERS.delete(request_id)
-            //Sorting the aggregators based on their name and adding index
-            result.sort((a, b) => {
-                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
-                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
-                if (nameA < nameB) {
-                    return -1;
-                }
-                if (nameA > nameB) {
-                    return 1;
-                }
-
-                // names must be equal
-                return 0;
-            });
-            var cnt = 1
-            result.forEach(element => {
-                element['index'] = cnt
-                cnt += 1
-            });
-            resolve(result)
-        })
-    });
-    return promise
-}
-
 /**
  * Get the list of Engines deployed on a specified Worker
  * @param {*} workername 
  * @returns 
  */
-function getWorkerEngineList(workername) {
+ function getWorkerEngineList(workername) {
     var request_id = UUID.v4();
     var message = {
         "request_id": request_id,
@@ -521,6 +484,61 @@ function getEngineCompleteNodeDiagram(engineid) {
 }
 
 
+
+// Aggregator-related functions
+/**
+ * Creates a new Monitoring activity
+ */
+function createNewMonitoringActivity() {
+    //TODO
+}
+
+/**
+ * Returns the list of online Aggregator instances
+ * @returns Returns a promise, which will contain the list of Aggregator after AGGREGATOR_PONG_WAITING_PERIOD
+ */
+async function getAggregatorList() {
+    LOG.logSystem('DEBUG', `getAggregatorList function called`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'PING'
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        REQUEST_BUFFERS.set(request_id, [])
+        wait(AGGREGATOR_PONG_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `getAggregatorList waiting period elapsed`, module.id)
+            var result = REQUEST_BUFFERS.get(request_id) || []
+            REQUEST_PROMISES.delete(request_id)
+            REQUEST_BUFFERS.delete(request_id)
+            //Sorting the aggregators based on their name and adding index
+            result.sort((a, b) => {
+                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
+                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
+                if (nameA < nameB) {
+                    return -1;
+                }
+                if (nameA > nameB) {
+                    return 1;
+                }
+
+                // names must be equal
+                return 0;
+            });
+            var cnt = 1
+            result.forEach(element => {
+                element['index'] = cnt
+                cnt += 1
+            });
+            resolve(result)
+        })
+    });
+    return promise
+}
+
+
 module.exports = {
     initBrokerConnection: initBrokerConnection,
 
@@ -530,10 +548,9 @@ module.exports = {
     searchForProcess: searchForProcess,
     getWorkerList: getWorkerList,
     getWorkerEngineList: getWorkerEngineList,
+    getEngineCompleteDiagram: getEngineCompleteDiagram,
+    getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram,
 
     createNewMonitoringActivity: createNewMonitoringActivity,
-    getAggregatorList: getAggregatorList,
-
-    getEngineCompleteDiagram: getEngineCompleteDiagram,
-    getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram
+    getAggregatorList: getAggregatorList
 }

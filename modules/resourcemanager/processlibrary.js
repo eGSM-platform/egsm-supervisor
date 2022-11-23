@@ -1,3 +1,7 @@
+/**
+ * Process Library is intended to serve as a storage space of process definitions
+ * After initialization the module provides a fast and easy way to get process definitions
+ */
 var fs = require('fs')
 var xml2js = require('xml2js');
 
@@ -9,11 +13,13 @@ module.id = 'PROCESSLIB'
 const LIBRARY_FOLDER = './process_library/'
 var PROCESS_TYPE_NUMBER = 0
 
-var PROCESS_TYPES = new Map()
+var PROCESS_TYPES = new Map() //Storage space to store all process type definitions
 
 
 /**
  * Loads all Proccess Types from the LIBRARY_FOLDER
+ * File representations are stored in RAM (no adhoc file operations)
+ * Should be called right after startup and (currently) not intended to call it in runtime
  */
 function loadProcessTypes() {
     LOG.logSystem('DEBUG', 'Loading Process Library', module.id)
@@ -74,7 +80,9 @@ function loadProcessTypes() {
 }
 
 /**
- * 
+ * Get all available process types
+ * The returning object contains only basic informations about the process type
+ * Use getProcessType() instead if you need the process definition files
  * @returns A list of available Process types, containing their names and description
  */
 function getProcessTypeList() {
@@ -103,7 +111,6 @@ function getProcessType(process_type_name) {
 loadProcessTypes()
 
 module.exports = {
-    loadProcessTypes: loadProcessTypes,
     getProcessTypeList: getProcessTypeList,
     getProcessType: getProcessType,
 }

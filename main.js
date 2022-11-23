@@ -49,7 +49,8 @@ else if (process.argv.length > 3) {
     return
 }
 
-//NOTE: Multi-Broker supervising is not supported yet, so only the first broker passed as argument in this function
+//NOTE: Multi-Broker supervising is not supported yet, so only the first broker passed as argument in this function,
+//all further brokers are neglected to avoid unforeseen issues
 MQTTCOMM.initBrokerConnection(RESOURCEMAN.getBrokers()[0])
 
 if(config){

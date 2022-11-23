@@ -1,13 +1,14 @@
-var fs = require('fs');
+/**
+ * Module to handle file-defined configurations
+ * The module functions need an object as argument (parsed XML, or JSON) and it 
+ * executes all necessary configuration-related operation (creating resources, new process etc.) 
+ */
 
 var RESOURCEMAN = require('../resourcemanager/resourcemanager')
 var SOCKET = require('../communication/socketserver')
 var LOG = require('../egsm-common/auxiliary/logManager')
-var AUX = require('../egsm-common/auxiliary/auxiliary')
 
 module.id = 'AUTOCONF'
-
-var PROCESS_CREATION_TIMEOUT = 200
 
 function applyBasicConfig(config) {
     //Add Brokers
