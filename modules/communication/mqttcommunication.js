@@ -14,10 +14,10 @@ const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 var BROKER = undefined
 
 const FREE_SLOT_WAITING_PERIOD = 250
-const ENGINE_SEARCH_WAITING_PERIOD = 100
+const ENGINE_SEARCH_WAITING_PERIOD = 500
 const ENGINE_PONG_WAITING_PERIOD = 500
 
-const PROCESS_SEARCH_WAITING_PERIOD = 100
+const PROCESS_SEARCH_WAITING_PERIOD = 500
 
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
@@ -98,6 +98,14 @@ function onMessageReceived(hostname, port, topic, message) {
                 }
                 break;
             }
+            case 'DELETE_ENGINE_RESP': {
+                LOG.logSystem('DEBUG', `DELETE_ENGINE_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['payload']['result'])
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
+            }
             case 'GET_ENGINE_LIST_RESP': {
                 LOG.logSystem('DEBUG', `GET_ENGINE_LIST_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
@@ -174,7 +182,6 @@ async function getFreeEngineSlot() {
         await wait(FREE_SLOT_WAITING_PERIOD)
         LOG.logSystem('DEBUG', `getFreeEngineSlot waiting period elapsed`, module.id)
         var result = REQUEST_BUFFERS.get(request_id) || []
-        console.log("WORKERS:" + result)
         REQUEST_PROMISES.delete(request_id)
         REQUEST_BUFFERS.delete(request_id)
         if (result.length == 0) {
@@ -185,7 +192,7 @@ async function getFreeEngineSlot() {
             var maxSlots = 0
             var selected = "no_response"
             result.forEach(element => {
-                if(element.free_slots > maxSlots){
+                if (element.free_slots > maxSlots) {
                     maxSlots = element.free_slots
                     selected = element.sender_id
                 }
@@ -307,6 +314,45 @@ async function searchForProcess(processid) {
             resolve(result)
         })
     });
+    return promise
+}
+
+async function deleteEngine(engineid) {
+    LOG.logSystem('DEBUG', `deleteEngine called for [${engineid}]`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'DELETE_ENGINE',
+        "payload": { "engine_id": engineid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        wait(PROCESS_SEARCH_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `searchForProcess waiting period elapsed for deleteEngine`, module.id)
+            resolve("delete_error")
+        })
+    });
+    return promise
+}
+
+async function deleteProcess(processid) {
+    var promise = new Promise(async function (resolve, reject) {
+        searchForProcess(processid).then(async (engines) => {
+            var results = []
+            engines.forEach(element => {
+                results.push(deleteEngine(element['name']))
+            });
+            Promise.all(results).then((results) => {
+                results.forEach(element => {
+                    if (element != "deleted") {
+                        resolve('error')
+                    }
+                });
+                resolve("ok")
+            })
+        })
+    })
     return promise
 }
 
@@ -479,6 +525,7 @@ module.exports = {
     initBrokerConnection: initBrokerConnection,
 
     createNewEngine: createNewEngine,
+    deleteProcess: deleteProcess,
     searchForEngine: searchForEngine,
     searchForProcess: searchForProcess,
     getWorkerList: getWorkerList,
