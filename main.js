@@ -9,12 +9,15 @@ var MQTTCOMM = require('./modules/communication/mqttcommunication')
 var PRIM = require('./modules/egsm-common/auxiliary/primitives')
 var SOCKET = require('./modules/communication/socketserver')
 var LIBRARY = require('./modules/resourcemanager/processlibrary')
-
+var DBCONFIG = require('./modules/egsm-common/database/databaseconfig')
 
 module.id = 'MAIN'
 
 var config = undefined
 var parseString = xml2js.parseString;
+
+DBCONFIG.initDatabaseConnection()
+//DBCONFIG.initTables()
 
 LOG.logSystem('DEBUG', 'Supervisor started', module.id)
 if (process.argv.length == 3) {

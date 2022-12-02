@@ -9,6 +9,8 @@ const schedule = require('node-schedule');
 var LOG = require('../egsm-common/auxiliary/logManager');
 var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
+var CONTMAN = require('../egsm-common/database/contentmanager')
+var DDB = require('../egsm-common/database/databaseconnector')
 
 module.id = 'SOCKET'
 
@@ -22,6 +24,8 @@ const MODULE_WORKER_DETAIL = 'worker_detail'
 const MODULE_ENGINES = 'process_operation'
 const MODULE_PROCESS_LIBRARY = 'process_library'
 const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
+const MODULE_ARTIFACTS = 'artifact_detail'
+const MODULE_NEW_AGGREGATOR_INSTANCE = 'new_aggregator_instance'
 
 /**
  * The websocket server
@@ -100,14 +104,26 @@ async function messageHandler(message) {
                 return getProcessEngineList(msgObj['payload']['process_instance_id'])
             case MODULE_PROCESS_LIBRARY:
                 return getProcessTypeList()
+            case MODULE_ARTIFACTS:
+                return getArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'])
         }
     }
     else if (msgObj['type'] == 'command') {
         switch (msgObj['module']) {
             case MODULE_NEW_PROCESS_INSTANCE:
                 return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
+            //case MODULE_NEW_AGGREGATOR_INSTANCE:
+
             case MODULE_ENGINES:
                 return deleteProcessInstance(msgObj['payload']['process_instance_id'])
+            case MODULE_ARTIFACTS:
+                if (msgObj['payload']['type'] == 'create') {
+                    return createNewArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'],
+                        msgObj['payload']['mqtt_host'], msgObj['payload']['mqtt_port'], msgObj['payload']['stakeholders'])
+                }
+                else if (msgObj['payload']['type'] == 'delete') {
+                    //TODO
+                }
         }
     }
 }
@@ -234,6 +250,57 @@ function getProcessTypeList() {
     return promise
 }
 
+function getArtifact(artifact_type, artifact_id) {
+    var promise = new Promise(async function (resolve, reject) {
+        DDB.readArtifactDefinition(artifact_type, artifact_id).then((artifact) => {
+            var response = {
+                module: MODULE_ARTIFACTS,
+                payload: {
+                    type: 'search',
+                    result: "not_found"
+                }
+            }
+            if (artifact) {
+                response.payload.result = 'found'
+                response.payload.artifact = artifact
+            }
+            console.log(JSON.stringify(response))
+            resolve(response)
+        })
+    });
+    return promise
+}
+
+async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_port, stakeholders) {
+    var promise = new Promise(async function (resolve, reject) {
+        var response = {
+            module: MODULE_ARTIFACTS,
+            payload: {
+                type: 'create',
+            }
+        }
+        await DDB.readArtifactDefinition(artifact_type, artifact_id).then((result) => {
+            if (result != undefined) {
+                response.payload.result = 'already_exists'
+                resolve(response)
+                return
+            }
+        })
+        DDB.writeNewArtifactDefinition(artifact_type, artifact_id, stakeholders, mqtt_host, Number(mqtt_port)).then((result) => {
+            console.log(result)
+            if (result == 'error') {
+                response.payload.result = 'backend_error'
+            }
+            else {
+                response.payload.result = 'created'
+            }
+            console.log(JSON.stringify(response))
+            resolve(response)
+        })
+    });
+    return promise
+}
+
 /**
  * Creates a new Process Instance. It will create at least one eGSM engines on random Workers
  * If the process has multiple perspectives, it will create multiple eGSM engines (maybe not on the same Worker)
@@ -265,17 +332,23 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                 });
 
                 await Promise.all(creation_results).then((promise_array) => {
+                    var aggregatedResult = true
                     promise_array.forEach(element => {
                         if (element != "created") {
-                            response.payload.result = "backend_error"
-                            resolve(response)
+                            aggregatedResult = false
                         }
                     });
                     if (bpmnJob) {
                         //TODO: Initiate BPMN job here
                     }
-                    response.payload.result = "ok"
-                    resolve(response)
+                    if (aggregatedResult) {
+                        response.payload.result = "ok"
+                        resolve(response)
+                    }
+                    else {
+                        response.payload.result = "backend_error"
+                        resolve(response)
+                    }
                 })
             }
         })
