@@ -10,7 +10,7 @@ var LOG = require('../egsm-common/auxiliary/logManager');
 var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
 var CONTMAN = require('../egsm-common/database/contentmanager')
-var DDB = require('../egsm-common/database/databaseconnector')
+var DDB = require('../egsm-common/database/databaseconnector');
 
 module.id = 'SOCKET'
 
@@ -25,6 +25,7 @@ const MODULE_ENGINES = 'process_operation'
 const MODULE_PROCESS_LIBRARY = 'process_library'
 const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 const MODULE_ARTIFACTS = 'artifact_detail'
+const MODULE_STAKEHOLDERS = 'stakeholder_detail'
 const MODULE_NEW_AGGREGATOR_INSTANCE = 'new_aggregator_instance'
 
 /**
@@ -106,6 +107,8 @@ async function messageHandler(message) {
                 return getProcessTypeList()
             case MODULE_ARTIFACTS:
                 return getArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'])
+            case MODULE_STAKEHOLDERS:
+                return getStakeholder(msgObj['payload']['stakeholder_name'])
         }
     }
     else if (msgObj['type'] == 'command') {
@@ -123,6 +126,10 @@ async function messageHandler(message) {
                 }
                 else if (msgObj['payload']['type'] == 'delete') {
                     //TODO
+                }
+            case MODULE_STAKEHOLDERS:
+                if (msgObj['payload']['type'] == 'create') {
+                    return createNewStakeholder(msgObj['payload']['stakeholder_name'])
                 }
         }
     }
@@ -271,6 +278,26 @@ function getArtifact(artifact_type, artifact_id) {
     return promise
 }
 
+function getStakeholder(stakeholder_name) {
+    var promise = new Promise(async function (resolve, reject) {
+        DDB.readStakeholder(stakeholder_name).then((stakeholder) => {
+            var response = {
+                module: MODULE_STAKEHOLDERS,
+                payload: {
+                    type: 'search',
+                    result: "not_found"
+                }
+            }
+            if (stakeholder) {
+                response.payload.result = 'found'
+                response.payload.stakeholder = stakeholder
+            }
+            resolve(response)
+        })
+    });
+    return promise
+}
+
 async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_port, stakeholders) {
     var promise = new Promise(async function (resolve, reject) {
         var response = {
@@ -279,23 +306,57 @@ async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_por
                 type: 'create',
             }
         }
-        await DDB.readArtifactDefinition(artifact_type, artifact_id).then((result) => {
+        DDB.readArtifactDefinition(artifact_type, artifact_id).then((result) => {
             if (result != undefined) {
                 response.payload.result = 'already_exists'
                 resolve(response)
                 return
             }
+            else{
+                DDB.writeNewArtifactDefinition(artifact_type, artifact_id, stakeholders, mqtt_host, Number(mqtt_port)).then((result) => {
+                    console.log(result)
+                    if (result == 'error') {
+                        response.payload.result = 'backend_error'
+                    }
+                    else {
+                        response.payload.result = 'created'
+                    }
+                    console.log(JSON.stringify(response))
+                    resolve(response)
+                })
+            }
         })
-        DDB.writeNewArtifactDefinition(artifact_type, artifact_id, stakeholders, mqtt_host, Number(mqtt_port)).then((result) => {
-            console.log(result)
-            if (result == 'error') {
-                response.payload.result = 'backend_error'
+    });
+    return promise
+}
+
+async function createNewStakeholder(stakeholder_name) {
+    var promise = new Promise(async function (resolve, reject) {
+        var response = {
+            module: MODULE_STAKEHOLDERS,
+            payload: {
+                type: 'create',
+            }
+        }
+        DDB.readStakeholder(stakeholder_name).then((result) => {
+            if (result != undefined) {
+                response.payload.result = 'already_exists'
+                resolve(response)
+                return
             }
             else {
-                response.payload.result = 'created'
+                DDB.writeNewStakeholder(stakeholder_name, '').then((result) => {
+                    //console.log(result)
+                    if (result == 'error') {
+                        response.payload.result = 'backend_error'
+                    }
+                    else {
+                        response.payload.result = 'created'
+                    }
+                    console.log(JSON.stringify(response))
+                    resolve(response)
+                })
             }
-            console.log(JSON.stringify(response))
-            resolve(response)
         })
     });
     return promise
