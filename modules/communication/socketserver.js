@@ -26,6 +26,7 @@ const MODULE_PROCESS_LIBRARY = 'process_library'
 const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 const MODULE_ARTIFACTS = 'artifact_detail'
 const MODULE_STAKEHOLDERS = 'stakeholder_detail'
+const MODULE_NOTIFICATIONS = 'notifications'
 const MODULE_NEW_AGGREGATOR_INSTANCE = 'new_aggregator_instance'
 
 /**
@@ -109,6 +110,11 @@ async function messageHandler(message) {
                 return getArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'])
             case MODULE_STAKEHOLDERS:
                 return getStakeholder(msgObj['payload']['stakeholder_name'])
+            case MODULE_NOTIFICATIONS:
+                if (msgObj['payload']['type'] == 'get_stakeholder_list') {
+                    console.log('ok1')
+                    return getStakeholderList()
+                }
         }
     }
     else if (msgObj['type'] == 'command') {
@@ -298,6 +304,24 @@ function getStakeholder(stakeholder_name) {
     return promise
 }
 
+function getStakeholderList() {
+    console.log('stakeholder_list')
+    var promise = new Promise(async function (resolve, reject) {
+        DDB.readAllStakeholder().then((stakeholderList) => {
+            var response = {
+                module: MODULE_NOTIFICATIONS,
+                payload: {
+                    type: 'stakeholder_list',
+                    stakeholder_list: stakeholderList,
+                    result: "ok"
+                }
+            }
+            resolve(response)
+        })
+    });
+    return promise
+}
+
 async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_port, stakeholders) {
     var promise = new Promise(async function (resolve, reject) {
         var response = {
@@ -312,7 +336,7 @@ async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_por
                 resolve(response)
                 return
             }
-            else{
+            else {
                 DDB.writeNewArtifactDefinition(artifact_type, artifact_id, stakeholders, mqtt_host, Number(mqtt_port)).then((result) => {
                     console.log(result)
                     if (result == 'error') {
