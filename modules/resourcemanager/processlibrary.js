@@ -48,6 +48,7 @@ function loadProcessTypes() {
                     var description = process_config['description'][0]
                     var bpmn_model = fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + process_config['bpmn-model'][0]['model'][0], 'utf8');
                     var perspectives = []
+                    var stakeholders = new Set()
 
                     //Iterating through perspectives
                     process_config['perspective'].forEach(element => {
@@ -58,8 +59,18 @@ function loadProcessTypes() {
                             bindings: fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['bindings'][0], 'utf8'),
                         })
                     });
+
+                    //Getting all Stakeholders from binding files
+                    perspectives.forEach(element => {
+                        parseString(element.bindings, function (err, bindingObj) {
+                            for (var key in bindingObj['martifact:definitions']['martifact:stakeholder']) {
+                                stakeholders.add(bindingObj['martifact:definitions']['martifact:stakeholder'][key]['$'].name)
+                            }
+                        })
+                    });
                     var currentProcess = {
                         name: name,
+                        stakeholders: stakeholders,
                         description: description,
                         bpmn_model: bpmn_model,
                         perspectives: perspectives

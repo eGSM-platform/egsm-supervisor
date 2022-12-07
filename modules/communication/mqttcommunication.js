@@ -15,6 +15,8 @@ const TOPIC_OUT_WORKER = 'supervisor_worker_out'
 const TOPIC_IN_AGGREGATOR = 'supervisor_aggregator_in'
 const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
+const TOPIC_PROCESS_LIFECYCLE = 'process_lifecycle'
+
 var BROKER = undefined
 
 //Waiting periods for different operation types
@@ -561,6 +563,24 @@ async function getAggregatorList() {
     return promise
 }
 
+/**
+ * 
+ * @param {string} type 'created' or 'destructed'
+ * @param {string} processtype 
+ * @param {string} instnaceid 
+ */
+async function publishProcessLifecycleEvent(type, process_instance_id, process_type, stakeholders) {
+    var message = {
+        type: type,
+        process: {
+            process_type: process_type,
+            instance_id: process_instance_id,
+            stakeholders: stakeholders
+        }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_PROCESS_LIFECYCLE, JSON.stringify(message))
+}
+
 
 module.exports = {
     initBrokerConnection: initBrokerConnection,
@@ -575,5 +595,6 @@ module.exports = {
     getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram,
 
     createNewMonitoringActivity: createNewMonitoringActivity,
-    getAggregatorList: getAggregatorList
+    getAggregatorList: getAggregatorList,
+    publishProcessLifecycleEvent: publishProcessLifecycleEvent,
 }

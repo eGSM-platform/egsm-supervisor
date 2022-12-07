@@ -27,6 +27,7 @@ const MODULE_NEW_PROCESS_INSTANCE = 'new_process_instance'
 const MODULE_ARTIFACTS = 'artifact_detail'
 const MODULE_STAKEHOLDERS = 'stakeholder_detail'
 const MODULE_NOTIFICATIONS = 'notifications'
+const MODULE_NEW_PROCESS_GROUP = 'new_process_group'
 const MODULE_NEW_AGGREGATOR_INSTANCE = 'new_aggregator_instance'
 
 /**
@@ -105,15 +106,25 @@ async function messageHandler(message) {
             case MODULE_ENGINES:
                 return getProcessEngineList(msgObj['payload']['process_instance_id'])
             case MODULE_PROCESS_LIBRARY:
-                return getProcessTypeList()
+                if (msgObj['payload']['type'] == 'process_type_list') {
+                    return getProcessTypeList()
+                }
+                else if (msgObj['payload']['type'] == 'get_process_group') {
+                    return readProcessGroup(msgObj['payload']['process_goup_id'])
+                }
             case MODULE_ARTIFACTS:
                 return getArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'])
             case MODULE_STAKEHOLDERS:
                 return getStakeholder(msgObj['payload']['stakeholder_name'])
             case MODULE_NOTIFICATIONS:
                 if (msgObj['payload']['type'] == 'get_stakeholder_list') {
-                    console.log('ok1')
                     return getStakeholderList()
+                }
+                else if (msgObj['payload']['type'] == 'get_past_notifications') {
+                    return getPastNotifications(msgObj['payload']['stakeholders'])
+                }
+                else if (msgObj['payload']['type'] == 'subscribe_notifications') {
+                    return subscribeToNotification(msgObj['payload']['stakeholders'])
                 }
         }
     }
@@ -124,7 +135,7 @@ async function messageHandler(message) {
             //case MODULE_NEW_AGGREGATOR_INSTANCE:
 
             case MODULE_ENGINES:
-                return deleteProcessInstance(msgObj['payload']['process_instance_id'])
+                return deleteProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['process_instance_id'])
             case MODULE_ARTIFACTS:
                 if (msgObj['payload']['type'] == 'create') {
                     return createNewArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'],
@@ -136,6 +147,10 @@ async function messageHandler(message) {
             case MODULE_STAKEHOLDERS:
                 if (msgObj['payload']['type'] == 'create') {
                     return createNewStakeholder(msgObj['payload']['stakeholder_name'])
+                }
+            case MODULE_NEW_PROCESS_GROUP:
+                if (msgObj['payload']['type'] == 'create') {
+                    return createNewProcessGroup(msgObj['payload']['group_id'], msgObj['payload']['rules'])
                 }
         }
     }
@@ -231,7 +246,7 @@ async function getProcessEngineList(process_instance_id) {
  * @param {string} process_instance_id 
  * @returns Promise to the result of the operation
  */
-async function deleteProcessInstance(process_instance_id) {
+async function deleteProcessInstance(process_type, process_instance_id) {
     var promise = new Promise(async function (resolve, reject) {
         MQTTCOMM.deleteProcess(process_instance_id).then((result) => {
             var response = {
@@ -240,6 +255,7 @@ async function deleteProcessInstance(process_instance_id) {
                     delete_result: result,
                 }
             }
+            MQTTCOMM.publishProcessLifecycleEvent('destructed', process_instance_id, process_type)
             resolve(response)
         })
     });
@@ -255,10 +271,32 @@ function getProcessTypeList() {
         var response = {
             module: MODULE_PROCESS_LIBRARY,
             payload: {
+                type: 'process_type_list',
                 process_types: PROCESSLIB.getProcessTypeList(),
             }
         }
         resolve(response)
+    });
+    return promise
+}
+
+function readProcessGroup(processgroupname) {
+    var promise = new Promise(async function (resolve, reject) {
+        DDB.readProcessGroup(processgroupname).then((processgroup) => {
+            var response = {
+                module: MODULE_PROCESS_LIBRARY,
+                payload: {
+                    type: 'get_process_group',
+                    result: "not_found"
+                }
+            }
+            if (processgroup) {
+                response.payload.result = 'found'
+                response.payload.process_group = processgroup
+            }
+            console.log(JSON.stringify(response))
+            resolve(response)
+        })
     });
     return promise
 }
@@ -305,7 +343,6 @@ function getStakeholder(stakeholder_name) {
 }
 
 function getStakeholderList() {
-    console.log('stakeholder_list')
     var promise = new Promise(async function (resolve, reject) {
         DDB.readAllStakeholder().then((stakeholderList) => {
             var response = {
@@ -320,6 +357,32 @@ function getStakeholderList() {
         })
     });
     return promise
+}
+
+//TODO notifications are currently not logged into database
+function getPastNotifications(stakeholders) {
+    var promise = new Promise(async function (resolve, reject) {
+        var promises = []
+        DDB.read
+
+
+        DDB.readAllStakeholder().then((notification_list) => {
+            var response = {
+                module: MODULE_NOTIFICATIONS,
+                payload: {
+                    type: 'get_past_notifications',
+                    notification_list: [],//notification_list,
+                    result: "ok"
+                }
+            }
+            resolve(response)
+        })
+    });
+    return promise
+}
+
+function subscribeToNotification(stakeholders) {
+
 }
 
 async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_port, stakeholders) {
@@ -386,6 +449,38 @@ async function createNewStakeholder(stakeholder_name) {
     return promise
 }
 
+async function createNewProcessGroup(group_id, rules) {
+    var promise = new Promise(async function (resolve, reject) {
+        var response = {
+            module: MODULE_NEW_PROCESS_GROUP,
+            payload: {
+                type: 'create',
+            }
+        }
+        DDB.readProcessGroup(group_id).then((result) => {
+            if (result != undefined) {
+                response.payload.result = 'already_exists'
+                resolve(response)
+                return
+            }
+            else {
+                DDB.writeNewProcessGroup(group_id, JSON.stringify(rules)).then((result) => {
+                    //console.log(result)
+                    if (result == 'error') {
+                        response.payload.result = 'backend_error'
+                    }
+                    else {
+                        response.payload.result = 'created'
+                    }
+                    console.log(JSON.stringify(response))
+                    resolve(response)
+                })
+            }
+        })
+    });
+    return promise
+}
+
 /**
  * Creates a new Process Instance. It will create at least one eGSM engines on random Workers
  * If the process has multiple perspectives, it will create multiple eGSM engines (maybe not on the same Worker)
@@ -428,11 +523,16 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                     }
                     if (aggregatedResult) {
                         response.payload.result = "ok"
+                        //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                        MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
                         resolve(response)
                     }
                     else {
                         response.payload.result = "backend_error"
-                        resolve(response)
+                        //Make sure we clean up in case any member engine has been created
+                        deleteProcessInstance(process_type, instance_name).then(() => {
+                            resolve(response)
+                        })
                     }
                 })
             }
