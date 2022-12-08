@@ -524,6 +524,7 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                     if (aggregatedResult) {
                         response.payload.result = "ok"
                         //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                        DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, [], 'localhost', 1883)
                         MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
                         resolve(response)
                     }
