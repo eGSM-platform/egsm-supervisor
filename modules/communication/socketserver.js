@@ -9,7 +9,6 @@ const schedule = require('node-schedule');
 var LOG = require('../egsm-common/auxiliary/logManager');
 var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
-var CONTMAN = require('../egsm-common/database/contentmanager')
 var DDB = require('../egsm-common/database/databaseconnector');
 
 module.id = 'SOCKET'
@@ -113,7 +112,9 @@ async function messageHandler(message) {
                     return readProcessGroup(msgObj['payload']['process_goup_id'])
                 }
             case MODULE_ARTIFACTS:
-                return getArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'])
+                if (msgObj['payload']['type'] == 'search') {
+                    return getArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'])
+                }
             case MODULE_STAKEHOLDERS:
                 return getStakeholder(msgObj['payload']['stakeholder_name'])
             case MODULE_NOTIFICATIONS:
@@ -138,8 +139,7 @@ async function messageHandler(message) {
                 return deleteProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['process_instance_id'])
             case MODULE_ARTIFACTS:
                 if (msgObj['payload']['type'] == 'create') {
-                    return createNewArtifact(msgObj['payload']['artifact_type'], msgObj['payload']['artifact_id'],
-                        msgObj['payload']['mqtt_host'], msgObj['payload']['mqtt_port'], msgObj['payload']['stakeholders'])
+                    return createNewArtifact(msgObj['payload']['artifact'])
                 }
                 else if (msgObj['payload']['type'] == 'delete') {
                     //TODO
@@ -363,7 +363,7 @@ function getStakeholderList() {
 function getPastNotifications(stakeholders) {
     var promise = new Promise(async function (resolve, reject) {
         var promises = []
-        DDB.read
+        //DDB.read
 
 
         DDB.readAllStakeholder().then((notification_list) => {
@@ -385,7 +385,7 @@ function subscribeToNotification(stakeholders) {
 
 }
 
-async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_port, stakeholders) {
+async function createNewArtifact(artifact,) {
     var promise = new Promise(async function (resolve, reject) {
         var response = {
             module: MODULE_ARTIFACTS,
@@ -393,14 +393,14 @@ async function createNewArtifact(artifact_type, artifact_id, mqtt_host, mqtt_por
                 type: 'create',
             }
         }
-        DDB.readArtifactDefinition(artifact_type, artifact_id).then((result) => {
+        DDB.readArtifactDefinition(artifact.type, artifact.id).then((result) => {
             if (result != undefined) {
                 response.payload.result = 'already_exists'
                 resolve(response)
                 return
             }
             else {
-                DDB.writeNewArtifactDefinition(artifact_type, artifact_id, stakeholders, mqtt_host, Number(mqtt_port)).then((result) => {
+                DDB.writeNewArtifactDefinition(artifact.type, artifact.id, artifact.stakeholders, artifact.host, artifact.port).then((result) => {
                     console.log(result)
                     if (result == 'error') {
                         response.payload.result = 'backend_error'
@@ -524,7 +524,7 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                     if (aggregatedResult) {
                         response.payload.result = "ok"
                         //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
-                        DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, [], 'localhost', 1883)
+                        DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, 'localhost', 1883)
                         MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
                         resolve(response)
                     }
