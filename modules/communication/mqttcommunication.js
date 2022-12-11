@@ -15,6 +15,8 @@ const TOPIC_OUT_WORKER = 'supervisor_worker_out'
 const TOPIC_IN_AGGREGATOR = 'supervisor_aggregator_in'
 const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
 
+const TOPIC_PROCESS_LIFECYCLE = 'process_lifecycle'
+
 var BROKER = undefined
 
 //Waiting periods for different operation types
@@ -132,7 +134,8 @@ function onMessageReceived(hostname, port, topic, message) {
                             activity_mumber: msgJson['payload']['activity_mumber'],
                             uptime: msgJson['payload']['uptime'],
                             hostname: msgJson['payload']['hostname'],
-                            port: msgJson['payload']['port']
+                            port: msgJson['payload']['port'],
+                            capacity: msgJson['payload']['capacity']
                         }
                         REQUEST_BUFFERS.get(msgJson['request_id']).push(filteredMessage)
                     }
@@ -154,6 +157,7 @@ function initBrokerConnection(broker) {
     MQTT.init(onMessageReceived)
     MQTT.createConnection(BROKER.host, BROKER.port, BROKER.username, BROKER.password)
     MQTT.subscribeTopic(BROKER.host, BROKER.port, TOPIC_IN_WORKER)
+    MQTT.subscribeTopic(BROKER.host, BROKER.port, TOPIC_IN_AGGREGATOR)
 
     LOG.logSystem('DEBUG', `initBrokerConnection function ran successfully`, module.id)
 }
@@ -421,7 +425,7 @@ async function getWorkerList() {
  * @param {*} workername 
  * @returns 
  */
- function getWorkerEngineList(workername) {
+function getWorkerEngineList(workername) {
     var request_id = UUID.v4();
     var message = {
         "request_id": request_id,
@@ -489,8 +493,29 @@ function getEngineCompleteNodeDiagram(engineid) {
 /**
  * Creates a new Monitoring activity
  */
-function createNewMonitoringActivity() {
-    //TODO
+//aggregatorid is optional, if not provided slot finding policy will be applied
+function createNewMonitoringActivity(activityid, definition, aggregatorid) {
+    LOG.logSystem('DEBUG', `createNewMonitoringActivity function called`, module.id)
+    var promise = new Promise(function (resolve, reject) {
+        var request_id = UUID.v4();
+        if (aggregatorid) {
+            var message = {
+                "request_id": request_id,
+                "message_type": 'NEW_MONITORING_ACTIVITY',
+                "payload": {
+                    "activity_id": activityid,
+                    "definition": definition
+                }
+            }
+            MQTT.publishTopic(BROKER.host, BROKER.port, aggregatorid, JSON.stringify(message))
+            resolve("created")
+        }
+        else {
+            resolve("error")
+            //TODO: Add slot finding policy
+        }
+    });
+    return promise
 }
 
 /**
@@ -538,6 +563,24 @@ async function getAggregatorList() {
     return promise
 }
 
+/**
+ * 
+ * @param {string} type 'created' or 'destructed'
+ * @param {string} processtype 
+ * @param {string} instnaceid 
+ */
+async function publishProcessLifecycleEvent(type, process_instance_id, process_type, stakeholders) {
+    var message = {
+        type: type,
+        process: {
+            process_type: process_type,
+            instance_id: process_instance_id,
+            stakeholders: stakeholders
+        }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_PROCESS_LIFECYCLE, JSON.stringify(message))
+}
+
 
 module.exports = {
     initBrokerConnection: initBrokerConnection,
@@ -552,5 +595,6 @@ module.exports = {
     getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram,
 
     createNewMonitoringActivity: createNewMonitoringActivity,
-    getAggregatorList: getAggregatorList
+    getAggregatorList: getAggregatorList,
+    publishProcessLifecycleEvent: publishProcessLifecycleEvent,
 }
