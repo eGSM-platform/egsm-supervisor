@@ -2,6 +2,7 @@
  * Interface for the frontend application
  * The module starts a websocket server the frontend application can connect to, all communication is happening through this
  */
+var UUID = require("uuid");
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 const schedule = require('node-schedule');
@@ -32,6 +33,8 @@ const MODULE_NEW_AGGREGATOR_INSTANCE = 'new_aggregator_instance'
 /**
  * The websocket server
  */
+var sessions = new Map() //session_id -> session related data
+
 var server = http.createServer(function (request, response) {
     LOG.logSystem('DEBUG', 'Received request', module.id)
     response.writeHead(404);
@@ -59,6 +62,12 @@ wsServer.on('request', function (request) {
 
     var connection = request.accept('data-connection', request.origin);
     LOG.logSystem('DEBUG', `Connection from origin ${request.origin} accepted`, module.id)
+    //Object to store session data
+    var sessionId = UUID.v4()
+    sessions.set(sessionId, {
+        connection: connection,
+        subscriptions: new Set()
+    })
 
     //Update System Information and Overview module periodically
     const periodicUpdaterJob = schedule.scheduleJob(` */${OVERVIEW_UPDATE_PERIOD} * * * * *`, function () {
@@ -73,7 +82,7 @@ wsServer.on('request', function (request) {
 
     connection.on('message', function (message) {
         LOG.logSystem('DEBUG', `Message received`, module.id)
-        messageHandler(message.utf8Data).then((data) => {
+        messageHandler(message.utf8Data, sessionId).then((data) => {
             connection.sendUTF(JSON.stringify(data))
         })
 
@@ -81,8 +90,26 @@ wsServer.on('request', function (request) {
 
     connection.on('close', function (reasonCode, description) {
         periodicUpdaterJob.cancel()
+        //Cancel session related subscriptions
+        sessions.get(sessionId).subscriptions.forEach(subscription => {
+            MQTTCOMM.unsubscribeNotificationTopic('notification/' + subscription)
+        });
+        sessions.delete(sessionId)
+
         LOG.logSystem('DEBUG', `Peer ${connection.remoteAddress} disconnected`, module.id)
     });
+});
+
+MQTTCOMM.EVENT_EMITTER.on('notification', (topic, message) => {
+    console.log('NOTIFICATION')
+    for (let [key, value] of sessions) {
+        value.subscriptions.forEach(subscription => {
+            if (subscription == topic.replace('notification/','')) {
+                console.log('send update')
+                value.connection.sendUTF(JSON.stringify(message))
+            }
+        });
+    }
 });
 
 /**
@@ -91,7 +118,7 @@ wsServer.on('request', function (request) {
  * @param {Object} message Message object from frontend 
  * @returns A promise to the response message
  */
-async function messageHandler(message) {
+async function messageHandler(message, sessionid) {
     var msgObj = JSON.parse(JSON.parse(message))
 
     if (msgObj['type'] == 'update_request') {
@@ -125,14 +152,14 @@ async function messageHandler(message) {
                     return getPastNotifications(msgObj['payload']['stakeholders'])
                 }
                 else if (msgObj['payload']['type'] == 'subscribe_notifications') {
-                    return subscribeToNotification(msgObj['payload']['stakeholders'])
+                    return setNotificationSubscriptions(msgObj['payload']['stakeholders'], sessionid)
                 }
         }
     }
     else if (msgObj['type'] == 'command') {
         switch (msgObj['module']) {
             case MODULE_NEW_PROCESS_INSTANCE:
-                return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'])
+                return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'], msgObj['payload']['bpmn_job_start'])
             //case MODULE_NEW_AGGREGATOR_INSTANCE:
 
             case MODULE_ENGINES:
@@ -381,8 +408,33 @@ function getPastNotifications(stakeholders) {
     return promise
 }
 
-function subscribeToNotification(stakeholders) {
+function setNotificationSubscriptions(stakeholders, sessionid) {
+    console.log(sessions)
+    var promise = new Promise(async function (resolve, reject) {
+        var newStakeholders = new Set(stakeholders)
+        //unsubscribe from topics which has locally but not in stakeholders
+        sessions.get(sessionid).subscriptions.forEach(element => {
+            if (!newStakeholders.has(element)) {
+                sessions.get(sessionid).subscriptions.delete(element)
+                MQTTCOMM.unsubscribeNotificationTopic('notification/' + element)
+            }
+        });
 
+        stakeholders.forEach(stakeholder => {
+            if (!sessions.get(sessionid).subscriptions.has(stakeholder)) {
+                sessions.get(sessionid).subscriptions.add(stakeholder)
+                MQTTCOMM.subscribeNotificationTopic('notification/' + stakeholder)
+            }
+        });
+        var response = {
+            module: MODULE_NOTIFICATIONS,
+            payload: {
+                type: 'ok',
+            }
+        }
+        resolve(response)
+    });
+    return promise
 }
 
 async function createNewArtifact(artifact,) {
@@ -489,7 +541,7 @@ async function createNewProcessGroup(group_id, rules) {
  * @param {Boolean} bpmnJob True if creation of BPMN Model Job is required
  * @returns Promise will become 'ok' if the creation was successfull 'id_not_free' if the ID is already used
  */
-async function createProcessInstance(process_type, instance_name, bpmnJob = false) {
+async function createProcessInstance(process_type, instance_name, bpmn_job) {
     var promise = new Promise(async function (resolve, reject) {
         MQTTCOMM.searchForProcess(instance_name).then(async (result) => {
             var response = {
@@ -508,35 +560,86 @@ async function createProcessInstance(process_type, instance_name, bpmnJob = fals
                 var creation_results = []
                 processDetails['perspectives'].forEach(async element => {
                     var engineName = process_type + '/' + instance_name + '__' + element['name']
-                    creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings']))
+                    creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'], [...processDetails.stakeholders]))
                 });
 
-                await Promise.all(creation_results).then((promise_array) => {
+                await Promise.all(creation_results).then(async (promise_array) => {
                     var aggregatedResult = true
                     promise_array.forEach(element => {
                         if (element != "created") {
                             aggregatedResult = false
                         }
                     });
-                    if (bpmnJob) {
-                        //TODO: Initiate BPMN job here
+                    var job_results = []
+                    if (aggregatedResult && bpmn_job) {
+                        console.log('create_job')
+                        processDetails['perspectives'].forEach(async element => {
+                            var jobId = process_type + '/' + instance_name + '__' + element['name'] + '/bpmn_job'
+                            job_results.push(createJobInstance(jobId, {}))
+                        });
                     }
-                    if (aggregatedResult) {
-                        response.payload.result = "ok"
-                        //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
-                        DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, 'localhost', 1883)
-                        MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
-                        resolve(response)
-                    }
-                    else {
-                        response.payload.result = "backend_error"
-                        //Make sure we clean up in case any member engine has been created
-                        deleteProcessInstance(process_type, instance_name).then(() => {
+                    await Promise.all(job_results).then((job_creation_results) => {
+                        console.log(JSON.stringify(job_creation_results))
+                        var jobAggregatedResult = true
+                        job_creation_results.forEach(element => {
+                            if (element.payload.result != "created") {
+                                jobAggregatedResult = false
+                            }
+                        });
+                        if (aggregatedResult && jobAggregatedResult) {
+                            response.payload.result = "ok"
+                            //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                            DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, 'localhost', 1883)
+                            MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
                             resolve(response)
-                        })
-                    }
+                        }
+                        //Engines are created, but the requested related jobs are not ok
+                        else if (aggregatedResult && !jobAggregatedResult) {
+                            response.payload.result = "engines_ok"
+                            //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                            DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, 'localhost', 1883)
+                            MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
+                            resolve(response)
+                        }
+                        else {
+                            response.payload.result = "backend_error"
+                            //Make sure we clean up in case any member engine has been created
+                            deleteProcessInstance(process_type, instance_name).then(() => {
+                                resolve(response)
+                            })
+                        }
+                    })
+
                 })
             }
+        })
+    })
+    return promise
+}
+
+function createJobInstance(jobid, jobconfig) {
+    var promise = new Promise(async function (resolve, reject) {
+        MQTTCOMM.searchForJob(jobid).then(async (result) => {
+            var response = {
+                module: MODULE_NEW_PROCESS_INSTANCE,
+                payload: {
+                    result: 'backend_error',
+                }
+            }
+            console.log('search result')
+            if (result != 'not_found') {
+                console.log('id_not_free')
+                response.payload.result = "id_not_free"
+                return resolve(response)
+            }
+            console.log('creation')
+            jobconfig['id'] = jobid
+            var result = await MQTTCOMM.createNewJob(jobconfig)
+            console.log('created: ' + result)
+            response.payload.result = result
+            return resolve(response)
+
+
         })
     })
     return promise

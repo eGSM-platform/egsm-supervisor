@@ -9,6 +9,7 @@
 
     <perspective>
         <name>Container</name>
+        <bpmn-model>models/bpmn_container.bpmn</bpmn-model>
         <egsm-model>models/egsm_container.xml</egsm-model>
         <info-model>models/info_container.xsd</info-model>
         <bindings>models/binding_container.xml</bindings>

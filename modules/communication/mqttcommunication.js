@@ -3,6 +3,7 @@
  */
 
 var UUID = require("uuid");
+var EventEmitter = require('events');
 
 var MQTT = require('../egsm-common/communication/mqttconnector')
 var AUX = require('../egsm-common/auxiliary/auxiliary')
@@ -29,6 +30,10 @@ const AGGREGATOR_PONG_WAITING_PERIOD = 500
 //Containers to store pending requests and store replies in case of multi-party cooperation
 var REQUEST_PROMISES = new Map() // Request id -> resolve references
 var REQUEST_BUFFERS = new Map() // Request id -> Usage specific storage place (used only for specific type of requests)
+
+var NOTIFICATION_TOPICS = new Map() //TOPICS where the SocketServer subscribed to
+
+const EVENT_EMITTER = new EventEmitter()
 
 module.id = 'MQTTCOMM'
 
@@ -142,7 +147,26 @@ function onMessageReceived(hostname, port, topic, message) {
                 }
                 break;
             }
+            case 'NEW_JOB_SLOT_RESP': {
+                LOG.logSystem('DEBUG', `NEW_JOB_SLOT message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_BUFFERS.get(msgJson['request_id']).push({ sender_id: msgJson['sender_id'], free_slots: msgJson['free_slots'] })
+                }
+                break;
+            }
+            case 'SEARCH': {
+                LOG.logSystem('DEBUG', `SEARCH job message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson)
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
+            }
         }
+    }
+    else if (NOTIFICATION_TOPICS.has(topic)) {
+        console.log('NOTIF')
+        EVENT_EMITTER.emit('notification', topic, message)
     }
 }
 
@@ -219,7 +243,7 @@ async function getFreeEngineSlot() {
  * @param {String} process_model 
  * @param {String} eventRouterConfig 
  */
-function createNewEngine(engineid, informal_model, process_model, eventRouterConfig) {
+function createNewEngine(engineid, informal_model, process_model, eventRouterConfig, stakeholders) {
     LOG.logSystem('DEBUG', `createNewEngine function called with engine ID: [${engineid}]`, module.id)
     var promise = new Promise(function (resolve, reject) {
         getFreeEngineSlot().then((value) => {
@@ -233,7 +257,8 @@ function createNewEngine(engineid, informal_model, process_model, eventRouterCon
                     "mqtt_password": BROKER.password,
                     "informal_model": informal_model,
                     "process_model": process_model,
-                    "event_router_config": eventRouterConfig
+                    "event_router_config": eventRouterConfig,
+                    "stakeholders": stakeholders
                 }
                 var requestId = UUID.v4();
                 var message = {
@@ -581,8 +606,121 @@ async function publishProcessLifecycleEvent(type, process_instance_id, process_t
     MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_PROCESS_LIFECYCLE, JSON.stringify(message))
 }
 
+async function getFreeJobSlot() {
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'NEW_JOB_SLOT'
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
+
+    var promise = new Promise(async function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        REQUEST_BUFFERS.set(request_id, [])
+        await wait(FREE_SLOT_WAITING_PERIOD)
+        LOG.logSystem('DEBUG', `getFreeJobSlot waiting period elapsed`, module.id)
+        var result = REQUEST_BUFFERS.get(request_id) || []
+        REQUEST_PROMISES.delete(request_id)
+        REQUEST_BUFFERS.delete(request_id)
+        if (result.length == 0) {
+            resolve('no_response')
+        }
+        else {
+            //Selecting the worker with the most free slots
+            var maxSlots = 0
+            var selected = "no_response"
+            result.forEach(element => {
+                if (element.free_slots > maxSlots) {
+                    maxSlots = element.free_slots
+                    selected = element.sender_id
+                }
+            });
+            resolve(selected)
+        }
+    });
+    return promise
+}
+
+async function createNewJob(jobconfig) {
+    LOG.logSystem('DEBUG', `createNewJob function called with engine ID`, module.id)
+    var promise = new Promise(function (resolve, reject) {
+        getFreeJobSlot().then((value) => {
+            if (value != 'no_response') {
+                LOG.logSystem('DEBUG', `Free job slot found on Aggregator: [${value}]`, module.id)
+                var msgPayload = {
+                    job_config: jobconfig,
+                    // "engine_id": engineid,
+                    // "mqtt_broker": BROKER.host,
+                    // "mqtt_port": BROKER.port,
+                    // "mqtt_user": BROKER.username,
+                    // "mqtt_password": BROKER.password,
+                    // "informal_model": informal_model,
+                    // "process_model": process_model,
+                    // "event_router_config": eventRouterConfig,
+                    // "stakeholders": stakeholders
+                }
+                var requestId = UUID.v4();
+                var message = {
+                    request_id: requestId,
+                    message_type: 'NEW_JOB',
+                    payload: msgPayload
+                }
+                MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
+                resolve("created")
+            }
+            else {
+                LOG.logSystem('WARNING', `No free job slot found`, module.id)
+                resolve("no_free_slot")
+            }
+        })
+    })
+    return promise
+}
+
+async function searchForJob(jobid) {
+    LOG.logSystem('DEBUG', `Searching for Job [${jobid}]`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'SEARCH',
+        "payload": { "job_id": jobid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        wait(ENGINE_SEARCH_WAITING_PERIOD).then(() => {
+            resolve('not_found')
+        })
+    });
+    return promise
+}
+
+async function subscribeNotificationTopic(topic) {
+    if (!NOTIFICATION_TOPICS.has(topic)) {
+        MQTT.subscribeTopic(BROKER.host, BROKER.port, topic)
+        NOTIFICATION_TOPICS.set(topic, 1)
+    }
+    else {
+        NOTIFICATION_TOPICS.set(topic, NOTIFICATION_TOPICS.get(topic) + 1)
+    }
+    console.log(NOTIFICATION_TOPICS)
+}
+
+async function unsubscribeNotificationTopic(topic) {
+    if (NOTIFICATION_TOPICS.has(topic)) {
+        if (NOTIFICATION_TOPICS.get(topic) == 1) {
+            NOTIFICATION_TOPICS.delete(topic)
+            MQTT.unsubscribeTopic(BROKER.host, BROKER.port, topic)
+        }
+        else {
+            NOTIFICATION_TOPICS.set(topic, NOTIFICATION_TOPICS.get(topic) - 1)
+        }
+    }
+}
+
 
 module.exports = {
+    EVENT_EMITTER: EVENT_EMITTER,
     initBrokerConnection: initBrokerConnection,
 
     createNewEngine: createNewEngine,
@@ -597,4 +735,11 @@ module.exports = {
     createNewMonitoringActivity: createNewMonitoringActivity,
     getAggregatorList: getAggregatorList,
     publishProcessLifecycleEvent: publishProcessLifecycleEvent,
+
+    createNewJob: createNewJob,
+    searchForJob: searchForJob,
+
+    subscribeNotificationTopic: subscribeNotificationTopic,
+    unsubscribeNotificationTopic: unsubscribeNotificationTopic,
+
 }

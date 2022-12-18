@@ -52,6 +52,7 @@ function loadProcessTypes() {
                     //Iterating through perspectives
                     process_config['perspective'].forEach(element => {
                         perspectives.push(new Perspective(element['name'][0],
+                            fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['bpmn-model'][0], 'utf8'),
                             fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['egsm-model'][0], 'utf8'),
                             fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['info-model'][0], 'utf8'),
                             fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['bindings'][0], 'utf8')))
