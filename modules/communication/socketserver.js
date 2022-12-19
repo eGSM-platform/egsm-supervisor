@@ -11,6 +11,7 @@ var LOG = require('../egsm-common/auxiliary/logManager');
 var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
 var DDB = require('../egsm-common/database/databaseconnector');
+const { createNewJob } = require("./mqttcommunication");
 
 module.id = 'SOCKET'
 
@@ -28,7 +29,7 @@ const MODULE_ARTIFACTS = 'artifact_detail'
 const MODULE_STAKEHOLDERS = 'stakeholder_detail'
 const MODULE_NOTIFICATIONS = 'notifications'
 const MODULE_NEW_PROCESS_GROUP = 'new_process_group'
-const MODULE_NEW_AGGREGATOR_INSTANCE = 'new_aggregator_instance'
+const MODULE_AGGREGATORS = 'aggregators'
 
 /**
  * The websocket server
@@ -104,7 +105,7 @@ MQTTCOMM.EVENT_EMITTER.on('notification', (topic, message) => {
     console.log('NOTIFICATION')
     for (let [key, value] of sessions) {
         value.subscriptions.forEach(subscription => {
-            if (subscription == topic.replace('notification/','')) {
+            if (subscription == topic.replace('notification/', '')) {
                 console.log('send update')
                 value.connection.sendUTF(JSON.stringify(message))
             }
@@ -178,6 +179,10 @@ async function messageHandler(message, sessionid) {
             case MODULE_NEW_PROCESS_GROUP:
                 if (msgObj['payload']['type'] == 'create') {
                     return createNewProcessGroup(msgObj['payload']['group_id'], msgObj['payload']['rules'])
+                }
+            case MODULE_AGGREGATORS:
+                if (msgObj['payload']['type'] == 'create') {
+                    return createJobInstance(msgObj['payload']['job_id'], msgObj['payload']['job_definition'])
                 }
         }
     }
@@ -623,12 +628,12 @@ function createJobInstance(jobid, jobconfig) {
             var response = {
                 module: MODULE_NEW_PROCESS_INSTANCE,
                 payload: {
+                    type:'create',
                     result: 'backend_error',
                 }
             }
             console.log('search result')
             if (result != 'not_found') {
-                console.log('id_not_free')
                 response.payload.result = "id_not_free"
                 return resolve(response)
             }
