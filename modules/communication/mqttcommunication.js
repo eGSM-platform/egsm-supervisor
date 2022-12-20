@@ -163,10 +163,10 @@ function onMessageReceived(hostname, port, topic, message) {
                 break;
             }
         }
-    }
+}
     else if (NOTIFICATION_TOPICS.has(topic)) {
         console.log('NOTIF')
-        EVENT_EMITTER.emit('notification', topic, message)
+        EVENT_EMITTER.emit('notification', topic, msgJson)
     }
 }
 

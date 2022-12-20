@@ -101,12 +101,19 @@ wsServer.on('request', function (request) {
     });
 });
 
-MQTTCOMM.EVENT_EMITTER.on('notification', (topic, message) => {
-    console.log('NOTIFICATION')
+MQTTCOMM.EVENT_EMITTER.on('notification', (topic, notification) => {
+    console.log('NOTIFICATION:' + notification)
     for (let [key, value] of sessions) {
         value.subscriptions.forEach(subscription => {
             if (subscription == topic.replace('notification/', '')) {
                 console.log('send update')
+                var message = {
+                    module: MODULE_NOTIFICATIONS,
+                    payload: {
+                        type: "new_notification",
+                        notification: notification
+                    }
+                }
                 value.connection.sendUTF(JSON.stringify(message))
             }
         });
@@ -628,7 +635,7 @@ function createJobInstance(jobid, jobconfig) {
             var response = {
                 module: MODULE_NEW_PROCESS_INSTANCE,
                 payload: {
-                    type:'create',
+                    type: 'create',
                     result: 'backend_error',
                 }
             }
