@@ -11,7 +11,6 @@ var LOG = require('../egsm-common/auxiliary/logManager');
 var PROCESSLIB = require('../resourcemanager/processlibrary');
 var MQTTCOMM = require('./mqttcommunication')
 var DDB = require('../egsm-common/database/databaseconnector');
-const { createNewJob } = require("./mqttcommunication");
 
 module.id = 'SOCKET'
 
@@ -269,10 +268,15 @@ async function getProcessEngineList(process_instance_id) {
     var promise = new Promise(async function (resolve, reject) {
         var engines = await MQTTCOMM.searchForProcess(process_instance_id)
         await Promise.all([engines])
+    
+        if (engines.length > 0) {
+            var bpmn_job = await MQTTCOMM.searchForJob(engines[0].type + '/' + process_instance_id + '/bpmn_job')
+        }
         var response = {
             module: MODULE_ENGINES,
             payload: {
-                engines: engines
+                engines: engines,
+                bpmn_job: bpmn_job?.['payload']?.['job'] || 'not_found'
             }
         }
         resolve(response)
@@ -421,7 +425,6 @@ function getPastNotifications(stakeholders) {
 }
 
 function setNotificationSubscriptions(stakeholders, sessionid) {
-    console.log(sessions)
     var promise = new Promise(async function (resolve, reject) {
         var newStakeholders = new Set(stakeholders)
         //unsubscribe from topics which has locally but not in stakeholders
@@ -568,11 +571,12 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
             }
             else {
                 var processDetails = PROCESSLIB.getProcessType(process_type)
-                //var promises = []
                 var creation_results = []
+                var monitoredEngines = []
                 processDetails['perspectives'].forEach(async element => {
                     var engineName = process_type + '/' + instance_name + '__' + element['name']
                     creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'], [...processDetails.stakeholders]))
+                    monitoredEngines.push(engineName)
                 });
 
                 await Promise.all(creation_results).then(async (promise_array) => {
@@ -583,12 +587,20 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                         }
                     });
                     var job_results = []
+                    //Creating one job, includig all perpsectives
                     if (aggregatedResult && bpmn_job) {
                         console.log('create_job')
-                        processDetails['perspectives'].forEach(async element => {
-                            var jobId = process_type + '/' + instance_name + '__' + element['name'] + '/bpmn_job'
-                            job_results.push(createJobInstance(jobId, {}))
-                        });
+                        var jobId = process_type + '/' + instance_name + '/bpmn_job'
+                        var jobConfig = {
+                            id: jobId,
+                            type: 'bpmn-job',
+                            process_type: process_type,
+                            //process_instance_id: instance_name,
+                            monitored: monitoredEngines,
+                            perspectives: processDetails['perspectives'],
+                            notificationrules: 'NOTIFY_ALL'
+                        }
+                        job_results.push(createJobInstance(jobId, jobConfig))
                     }
                     await Promise.all(job_results).then((job_creation_results) => {
                         console.log(JSON.stringify(job_creation_results))
@@ -645,7 +657,6 @@ function createJobInstance(jobid, jobconfig) {
                 return resolve(response)
             }
             console.log('creation')
-            jobconfig['id'] = jobid
             var result = await MQTTCOMM.createNewJob(jobconfig)
             console.log('created: ' + result)
             response.payload.result = result
