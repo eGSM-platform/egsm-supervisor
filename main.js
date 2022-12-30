@@ -17,7 +17,7 @@ var BROKER = undefined
 var defaultBroker = new Broker('localhost', 1883, '', '')
 var parseString = xml2js.parseString;
 
-DBCONFIG.initDatabaseConnection()
+DBCONFIG.initDatabaseConnection('localhost',9000,'local','fakeMyKeyId','fakeSecretAccessKey')
 
 //DBCONFIG.deleteTables()
 //DBCONFIG.initTables()
