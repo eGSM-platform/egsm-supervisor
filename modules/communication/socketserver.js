@@ -1,6 +1,6 @@
 /**
  * Interface for the frontend application
- * The module starts a websocket server the frontend application can connect to, all communication is happening through this
+ * The module starts a websocket server the frontend application can connect to, all supervisor-front-end communication is happening through this
  */
 var UUID = require("uuid");
 var WebSocketServer = require('websocket').server;
@@ -30,9 +30,6 @@ const MODULE_NOTIFICATIONS = 'notifications'
 const MODULE_NEW_PROCESS_GROUP = 'new_process_group'
 const MODULE_AGGREGATORS = 'aggregators'
 
-/**
- * The websocket server
- */
 var sessions = new Map() //session_id -> session related data
 
 var server = http.createServer(function (request, response) {
@@ -100,12 +97,12 @@ wsServer.on('request', function (request) {
     });
 });
 
+//Subscribe to notifications from MqttCommunication module
+//Feature used in front-end->Notification menu
 MQTTCOMM.EVENT_EMITTER.on('notification', (topic, notification) => {
-    console.log('NOTIFICATION:' + notification)
     for (let [key, value] of sessions) {
         value.subscriptions.forEach(subscription => {
             if (subscription == topic.replace('notification/', '')) {
-                console.log('send update')
                 var message = {
                     module: MODULE_NOTIFICATIONS,
                     payload: {
@@ -121,8 +118,9 @@ MQTTCOMM.EVENT_EMITTER.on('notification', (topic, notification) => {
 
 /**
  * Main messagehandler function
- * Calls the necessary functions the execute the requests
+ * Calls the necessary functions to execute the requests and/or process the received messages
  * @param {Object} message Message object from frontend 
+ * @param {String} sessionid Id of the session the message received from 
  * @returns A promise to the response message
  */
 async function messageHandler(message, sessionid) {
@@ -167,8 +165,6 @@ async function messageHandler(message, sessionid) {
         switch (msgObj['module']) {
             case MODULE_NEW_PROCESS_INSTANCE:
                 return await createProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['instance_name'], msgObj['payload']['bpmn_job_start'])
-            //case MODULE_NEW_AGGREGATOR_INSTANCE:
-
             case MODULE_ENGINES:
                 return deleteProcessInstance(msgObj['payload']['process_type'], msgObj['payload']['process_instance_id'])
             case MODULE_ARTIFACTS:
@@ -176,7 +172,7 @@ async function messageHandler(message, sessionid) {
                     return createNewArtifact(msgObj['payload']['artifact'])
                 }
                 else if (msgObj['payload']['type'] == 'delete') {
-                    //TODO
+                    //TODO: Add Artifact->delete functionality here!
                 }
             case MODULE_STAKEHOLDERS:
                 if (msgObj['payload']['type'] == 'create') {
@@ -241,7 +237,7 @@ async function getOverviewModuleUpdate() {
 
 /**
  * Returns the array of engines deployed on the Worker specified as argument
- * @param {String} workername 
+ * @param {String} workername Worker Id to specify the Worker
  * @returns Promise will contain array of Engines (empty array in case of no engine)
  */
 async function getWorkerEngineList(workername) {
@@ -260,15 +256,15 @@ async function getWorkerEngineList(workername) {
 }
 
 /**
- * Returns the array of engines related to the process specified by the argument
- * @param {*} process_instance_id Process instance ID (NOT ENGINE ID)
- * @returns  Promise will contain array of Engines (empty array in case of no engine)
+ * Returns an array of engines belonging to the process specified by 'process_instance_id' argument
+ * @param {String} process_instance_id Process instance ID
+ * @returns  Promise will contain an array of Engines (empty array in case of no engine (no process) found)
  */
 async function getProcessEngineList(process_instance_id) {
     var promise = new Promise(async function (resolve, reject) {
         var engines = await MQTTCOMM.searchForProcess(process_instance_id)
         await Promise.all([engines])
-    
+
         if (engines.length > 0) {
             var bpmn_job = await MQTTCOMM.searchForJob(engines[0].type + '/' + process_instance_id + '/bpmn_job')
         }
@@ -285,8 +281,9 @@ async function getProcessEngineList(process_instance_id) {
 }
 
 /**
- * Deletes all engines belonging to the specified process instance
- * @param {string} process_instance_id 
+ * Deletes all engines belonging to the specified process instance specified by 'process_instance_id' argument
+ * As a side effect the function will publish the Destruction Process Lifecycle event as well
+ * @param {string} process_instance_id Process instance ID
  * @returns Promise to the result of the operation
  */
 async function deleteProcessInstance(process_type, process_instance_id) {
@@ -307,7 +304,7 @@ async function deleteProcessInstance(process_type, process_instance_id) {
 
 /**
  * Get list of available Process Type definitions
- * @returns Promise to the array of Process types
+ * @returns Promise to the response body containing the process types as well
  */
 function getProcessTypeList() {
     var promise = new Promise(async function (resolve, reject) {
@@ -323,6 +320,13 @@ function getProcessTypeList() {
     return promise
 }
 
+//TODO: Add process type level statistics retrieval function (extension of getProcessTypeList())
+
+/**
+ * Retrieve information about the specified Process Group
+ * @param {String} processgroupname Name of the Process Group 
+ * @returns Promise will contain the details of the specified Process Group, or 'not_found' as result
+ */
 function readProcessGroup(processgroupname) {
     var promise = new Promise(async function (resolve, reject) {
         DDB.readProcessGroup(processgroupname).then((processgroup) => {
@@ -337,13 +341,18 @@ function readProcessGroup(processgroupname) {
                 response.payload.result = 'found'
                 response.payload.process_group = processgroup
             }
-            console.log(JSON.stringify(response))
             resolve(response)
         })
     });
     return promise
 }
 
+/**
+ * Retrieve Details about a specified Artifact
+ * @param {String} artifact_type Type of the requested Artifact
+ * @param {String} artifact_id Instance ID of the requested Artifact
+ * @returns Promise will contain details of Artifact (if found), or 'not_found' as result
+ */
 function getArtifact(artifact_type, artifact_id) {
     var promise = new Promise(async function (resolve, reject) {
         DDB.readArtifactDefinition(artifact_type, artifact_id).then((artifact) => {
@@ -358,13 +367,17 @@ function getArtifact(artifact_type, artifact_id) {
                 response.payload.result = 'found'
                 response.payload.artifact = artifact
             }
-            console.log(JSON.stringify(response))
             resolve(response)
         })
     });
     return promise
 }
 
+/**
+ * Retrieve details about the specified Stakeholder
+ * @param {String} stakeholder_name Name of the requested Stakeholder
+ * @returns Promise will contain the details of the requested Stakeholder, or 'not_found' as result
+ */
 function getStakeholder(stakeholder_name) {
     var promise = new Promise(async function (resolve, reject) {
         DDB.readStakeholder(stakeholder_name).then((stakeholder) => {
@@ -385,6 +398,10 @@ function getStakeholder(stakeholder_name) {
     return promise
 }
 
+/**
+ * Get all defined Stakeholders at once (name and details)
+ * @returns Promise will contain a list of stakeholders supplemented with their details stored in the database
+ */
 function getStakeholderList() {
     var promise = new Promise(async function (resolve, reject) {
         DDB.readAllStakeholder().then((stakeholderList) => {
@@ -402,13 +419,16 @@ function getStakeholderList() {
     return promise
 }
 
-//TODO notifications are currently not logged into database
+/**
+ * Retrieve past notifications from Database intended for a specified Stakeholder
+ * TODO: Function is not implemented completely! Notifications are currently not logged into database!
+ * @param {String} stakeholders Name of the specified Stakeholder 
+ * @returns Promise will contain a list of notifications
+ */
 function getPastNotifications(stakeholders) {
     var promise = new Promise(async function (resolve, reject) {
         var promises = []
         //DDB.read
-
-
         DDB.readAllStakeholder().then((notification_list) => {
             var response = {
                 module: MODULE_NOTIFICATIONS,
@@ -424,6 +444,20 @@ function getPastNotifications(stakeholders) {
     return promise
 }
 
+/**
+ * Function subscribes a session to one or more Stakeholder's notifications
+ * This function will make the Supervisor to subscribe to the notification topics of the specified stakeholders and
+ * it will forward the notifications to the specified session through the established websocket connection
+ * A subscription to a certain Stakeholder can be withdraw by calling this function again (with the same session id), 
+ * but 'stakeholders' attribute not containing the certain Stakeholder. Each call of the function it will compare the
+ * content of 'stakeholders' array, with the current subscription and subscribe and remove to achieve the state specified 
+ * by 'stakeholders' array
+ * All subscriptions are automatically withdraw in case of socket disconnection
+ * without
+ * @param {String[]} stakeholders List of Stakeholder names specifying the Stakeholders
+ * @param {String} sessionid Session ID 
+ * @returns A Promise containing the response body for the Front-end
+ */
 function setNotificationSubscriptions(stakeholders, sessionid) {
     var promise = new Promise(async function (resolve, reject) {
         var newStakeholders = new Set(stakeholders)
@@ -452,6 +486,11 @@ function setNotificationSubscriptions(stakeholders, sessionid) {
     return promise
 }
 
+/**
+ * Creating a new Artifact in the Database
+ * @param {Object} artifact Object containing all datafields necessary for the new Artifact 
+ * @returns Promise containing the result of the operation ('already_exists'/'created'/'backend_error')
+ */
 async function createNewArtifact(artifact,) {
     var promise = new Promise(async function (resolve, reject) {
         var response = {
@@ -468,14 +507,12 @@ async function createNewArtifact(artifact,) {
             }
             else {
                 DDB.writeNewArtifactDefinition(artifact.type, artifact.id, artifact.stakeholders, artifact.host, artifact.port).then((result) => {
-                    console.log(result)
                     if (result == 'error') {
                         response.payload.result = 'backend_error'
                     }
                     else {
                         response.payload.result = 'created'
                     }
-                    console.log(JSON.stringify(response))
                     resolve(response)
                 })
             }
@@ -484,6 +521,11 @@ async function createNewArtifact(artifact,) {
     return promise
 }
 
+/**
+ * Creates a new Stakeholder in the Database
+ * @param {String} stakeholder_name Name of the Stakeholder
+ * @returns Promise containing the result of the operation ('create'/'already_exists'/'backend_error')
+ */
 async function createNewStakeholder(stakeholder_name) {
     var promise = new Promise(async function (resolve, reject) {
         var response = {
@@ -500,14 +542,12 @@ async function createNewStakeholder(stakeholder_name) {
             }
             else {
                 DDB.writeNewStakeholder(stakeholder_name, '').then((result) => {
-                    //console.log(result)
                     if (result == 'error') {
                         response.payload.result = 'backend_error'
                     }
                     else {
                         response.payload.result = 'created'
                     }
-                    console.log(JSON.stringify(response))
                     resolve(response)
                 })
             }
@@ -516,6 +556,12 @@ async function createNewStakeholder(stakeholder_name) {
     return promise
 }
 
+/**
+ * Defines a new Process Group in the Database
+ * @param {String} group_id Name of the new Process Group
+ * @param {Object} rules Object containing the rules of the freshly created Process Group
+ * @returns Promise will contain the result of the operation ('created'/'already_exists'/'backend_error')
+ */
 async function createNewProcessGroup(group_id, rules) {
     var promise = new Promise(async function (resolve, reject) {
         var response = {
@@ -532,14 +578,12 @@ async function createNewProcessGroup(group_id, rules) {
             }
             else {
                 DDB.writeNewProcessGroup(group_id, JSON.stringify(rules)).then((result) => {
-                    //console.log(result)
                     if (result == 'error') {
                         response.payload.result = 'backend_error'
                     }
                     else {
                         response.payload.result = 'created'
                     }
-                    console.log(JSON.stringify(response))
                     resolve(response)
                 })
             }
@@ -549,12 +593,13 @@ async function createNewProcessGroup(group_id, rules) {
 }
 
 /**
- * Creates a new Process Instance. It will create at least one eGSM engines on random Workers
- * If the process has multiple perspectives, it will create multiple eGSM engines (maybe not on the same Worker)
+ * Creates a new Process Instance. It will create at least one eGSM engines on a Worker selected by the slot selecting policy
+ * If the process has multiple perspectives, it will create multiple eGSM engines (not necessarily on the same Worker)
+ * Function also publishes to Process Lifecycle topic in case of successful operation
  * @param {String} process_type Type of the process (need to be defined in the library module in advance)
- * @param {String} instance_name Process instance name
- * @param {Boolean} bpmnJob True if creation of BPMN Model Job is required
- * @returns Promise will become 'ok' if the creation was successfull 'id_not_free' if the ID is already used
+ * @param {String} instance_name Process instance name (the function checks for global uniqueness among other Processes and returns error if the ID is already in use)
+ * @param {Boolean} bpmnJob True if an eGSM to BPMN translation Job should be started as well (on an Aggregator)
+ * @returns Promise will become 'ok' if the creation was successfull 'id_not_free' if the ID is already used, 'engines_ok' if translation Job was requested but not managed to create for any reason
  */
 async function createProcessInstance(process_type, instance_name, bpmn_job) {
     var promise = new Promise(async function (resolve, reject) {
@@ -589,7 +634,6 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                     var job_results = []
                     //Creating one job, includig all perpsectives
                     if (aggregatedResult && bpmn_job) {
-                        console.log('create_job')
                         var jobId = process_type + '/' + instance_name + '/bpmn_job'
                         var jobConfig = {
                             id: jobId,
@@ -603,7 +647,6 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                         job_results.push(createJobInstance(jobId, jobConfig))
                     }
                     await Promise.all(job_results).then((job_creation_results) => {
-                        console.log(JSON.stringify(job_creation_results))
                         var jobAggregatedResult = true
                         job_creation_results.forEach(element => {
                             if (element.payload.result != "created") {
@@ -641,6 +684,12 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
     return promise
 }
 
+/**
+ * Creates a new job instance on an Aggregator instance selected based on the slot policy
+ * @param {String} jobid Id of the new Job (must be globally unique, function checks for uniqueness)
+ * @param {Object} jobconfig Object containing all attributes necessary to start the Job
+ * @returns Promise containing the result of the operation ('backend_error'/'id_not_free', etc...)
+ */
 function createJobInstance(jobid, jobconfig) {
     var promise = new Promise(async function (resolve, reject) {
         MQTTCOMM.searchForJob(jobid).then(async (result) => {
@@ -651,25 +700,19 @@ function createJobInstance(jobid, jobconfig) {
                     result: 'backend_error',
                 }
             }
-            console.log('search result')
             if (result != 'not_found') {
                 response.payload.result = "id_not_free"
                 return resolve(response)
             }
-            console.log('creation')
             var result = await MQTTCOMM.createNewJob(jobconfig)
-            console.log('created: ' + result)
             response.payload.result = result
             return resolve(response)
-
-
         })
     })
     return promise
 }
 
-// NOTE: Most functions of the module are intended to use internally only, although some functions are
-// exposed for auxiliary modules (e.g.: autoconfig) to avoid code duplication
+// NOTE: Most functions of the module are intended to use internally only, so they are not exposed here
 module.exports = {
     createProcessInstance: createProcessInstance
 }
