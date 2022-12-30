@@ -1,55 +1,70 @@
+/**
+ * Module implements high-level functions for MQTT-based communication with other parts of the architecture
+ */
+
 var UUID = require("uuid");
+var EventEmitter = require('events');
 
 var MQTT = require('../egsm-common/communication/mqttconnector')
 var AUX = require('../egsm-common/auxiliary/auxiliary')
 var LOG = require('../egsm-common/auxiliary/logManager')
 
 //Topic definitions
-const TOPIC_IN_WORKER = 'supervisor_woker_in'
-const TOPIC_OUT_WORKER = 'supervisor_worker_out'
+const WORKERS_TO_SUPERVISOR = 'workers_to_supervisor'
+const SUPERVISOR_TO_WORKERS = 'supervisor_to_workers'
 
-const TOPIC_IN_AGGREGATOR = 'supervisor_aggregator_in'
-const TOPIC_OUT_AGGREGATOR = 'supervisor_aggregator_out'
+const AGGREGATORS_TO_SUPERVISOR = 'aggregators_to_supervisor'
+const SUPERVISOR_TO_AGGREGATORS = 'supervisor_to_aggregators'
+
+const TOPIC_PROCESS_LIFECYCLE = 'process_lifecycle'
 
 var BROKER = undefined
 
-const FREE_SLOT_WAITING_PERIOD = 1000
-const ENGINE_SEARCH_WAITING_PERIOD = 100
+//Waiting periods for different operation types
+const FREE_SLOT_WAITING_PERIOD = 250
+const ENGINE_SEARCH_WAITING_PERIOD = 500
 const ENGINE_PONG_WAITING_PERIOD = 500
-
-const PROCESS_SEARCH_WAITING_PERIOD = 100
-
+const PROCESS_SEARCH_WAITING_PERIOD = 500
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
-var REQUEST_PROMISES = new Map() //Request id -> resolve references
-var REQUEST_BUFFERS = new Map() //Request id -> Usage specific storage place (used only for specific type of requests)
+//Containers to store pending requests and store replies in case of multi-party cooperation
+var REQUEST_PROMISES = new Map() // Request id -> resolve references
+var REQUEST_BUFFERS = new Map() // Request id -> Usage specific storage place (used only for specific type of requests)
+
+var NOTIFICATION_TOPICS = new Map() //TOPICS where the SocketServer subscribed to
+
+const EVENT_EMITTER = new EventEmitter()
 
 module.id = 'MQTTCOMM'
-
-/*Message body may contain:
--sender_type: WORKER/AGGREGATOR
--sender_id: <string>
--message_type: PONG/PING/NEW_WORKER/NEW_ENGINE_SLOT/NEW_ENGINE_SLOT_RESP/NEW_ENGINE/SEARCH
--request_id: <string> (optional if no response expected)
--payload: <string>
-*/
 
 /**
  * Message handler function for MQTT messages
  * It neglects the messages not intended to handle in this module
  */
+/**
+ * Handles incoming MQTT messages
+ * It neglects the messages not intended to handle in this module
+ * Message body may contain:
+ * sender_type: WORKER/AGGREGATOR
+ * sender_id: <string>
+ * message_type: PONG/PING/NEW_WORKER/NEW_ENGINE_SLOT/NEW_ENGINE_SLOT_RESP/NEW_ENGINE/SEARCH/...
+ * request_id: <string> (optional if no response expected)
+ * payload: <string>
+ * @param {String} hostname Broker host the message received from
+ * @param {Number} port Broker port the message received from
+ * @param {String} topic Topic the message received from
+ * @param {String} message The message itself in string format (considering valid JSON)
+ */
 function onMessageReceived(hostname, port, topic, message) {
     LOG.logSystem('DEBUG', 'onMessageReceived function called', module.id)
     var msgJson = JSON.parse(message.toString())
-    if (topic == TOPIC_IN_WORKER) {
+    //Messages from the Workers
+    if (topic == WORKERS_TO_SUPERVISOR) {
         switch (msgJson['message_type']) {
             case 'NEW_ENGINE_SLOT_RESP': {
                 LOG.logSystem('DEBUG', `NEW_ENGINE_SLOT_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
-                //Here several messages are expected and only the fastest one will be handled
-                //All the further messages will be neglected
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
-                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['sender_id'])
-                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                    REQUEST_BUFFERS.get(msgJson['request_id']).push({ sender_id: msgJson['sender_id'], free_slots: msgJson['free_slots'] })
                 }
                 break;
             }
@@ -101,6 +116,14 @@ function onMessageReceived(hostname, port, topic, message) {
                 }
                 break;
             }
+            case 'DELETE_ENGINE_RESP': {
+                LOG.logSystem('DEBUG', `DELETE_ENGINE_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson['payload']['result'])
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
+            }
             case 'GET_ENGINE_LIST_RESP': {
                 LOG.logSystem('DEBUG', `GET_ENGINE_LIST_RESP message received, request_id: [${msgJson['request_id']}]`, module.id)
                 if (REQUEST_PROMISES.has(msgJson['request_id'])) {
@@ -110,7 +133,8 @@ function onMessageReceived(hostname, port, topic, message) {
             }
         }
     }
-    else if (topic == TOPIC_IN_AGGREGATOR) {
+    //Messages from an Aggregator
+    else if (topic == AGGREGATORS_TO_SUPERVISOR) {
         switch (msgJson['message_type']) {
             case 'PONG': {
                 LOG.logSystem('DEBUG', `PONG aggregator message received, request_id: [${msgJson['request_id']}]`, module.id)
@@ -121,22 +145,38 @@ function onMessageReceived(hostname, port, topic, message) {
                             activity_mumber: msgJson['payload']['activity_mumber'],
                             uptime: msgJson['payload']['uptime'],
                             hostname: msgJson['payload']['hostname'],
-                            port: msgJson['payload']['port']
+                            port: msgJson['payload']['port'],
+                            capacity: msgJson['payload']['capacity']
                         }
                         REQUEST_BUFFERS.get(msgJson['request_id']).push(filteredMessage)
                     }
                 }
                 break;
             }
+            case 'NEW_JOB_SLOT_RESP': {
+                LOG.logSystem('DEBUG', `NEW_JOB_SLOT message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_BUFFERS.get(msgJson['request_id']).push({ sender_id: msgJson['sender_id'], free_slots: msgJson['free_slots'] })
+                }
+                break;
+            }
+            case 'SEARCH': {
+                LOG.logSystem('DEBUG', `SEARCH job message received, request_id: [${msgJson['request_id']}]`, module.id)
+                if (REQUEST_PROMISES.has(msgJson['request_id'])) {
+                    REQUEST_PROMISES.get(msgJson['request_id'])(msgJson)
+                    REQUEST_PROMISES.delete(msgJson['request_id'])
+                }
+                break;
+            }
         }
     }
-    else {
-
+    else if (NOTIFICATION_TOPICS.has(topic)) {
+        EVENT_EMITTER.emit('notification', topic, msgJson)
     }
 }
 
 /**
- * Inits mqqt broker connection and subscribes to the necessary topics to start operation
+ * Inits MQTT broker connection and subscribes to the necessary topics to start operation
  * @param {Broker} broker Broker the supervisor should use to reach out to the managed workers and aggregators
  */
 function initBrokerConnection(broker) {
@@ -145,7 +185,8 @@ function initBrokerConnection(broker) {
 
     MQTT.init(onMessageReceived)
     MQTT.createConnection(BROKER.host, BROKER.port, BROKER.username, BROKER.password)
-    MQTT.subscribeTopic(BROKER.host, BROKER.port, TOPIC_IN_WORKER)
+    MQTT.subscribeTopic(BROKER.host, BROKER.port, WORKERS_TO_SUPERVISOR)
+    MQTT.subscribeTopic(BROKER.host, BROKER.port, AGGREGATORS_TO_SUPERVISOR)
 
     LOG.logSystem('DEBUG', `initBrokerConnection function ran successfully`, module.id)
 }
@@ -162,6 +203,7 @@ async function wait(delay) {
  * Intended to find a free engine slot on any worker instance
  * @returns Returns with a promise whose value will be 'no_response' in case of no free slot found and 
  * it will contain the ID of a Worker with a free slot otherwise
+ * If more than one response arrived (multiple Workers has free slot) then the function will choose the one with the most free slots
  */
 async function getFreeEngineSlot() {
     var request_id = UUID.v4();
@@ -169,13 +211,31 @@ async function getFreeEngineSlot() {
         "request_id": request_id,
         "message_type": 'NEW_ENGINE_SLOT'
     }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
 
-    var promise = new Promise(function (resolve, reject) {
+    var promise = new Promise(async function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
-        wait(FREE_SLOT_WAITING_PERIOD).then(() => {
+        REQUEST_BUFFERS.set(request_id, [])
+        await wait(FREE_SLOT_WAITING_PERIOD)
+        LOG.logSystem('DEBUG', `getFreeEngineSlot waiting period elapsed`, module.id)
+        var result = REQUEST_BUFFERS.get(request_id) || []
+        REQUEST_PROMISES.delete(request_id)
+        REQUEST_BUFFERS.delete(request_id)
+        if (result.length == 0) {
             resolve('no_response')
-        })
+        }
+        else {
+            //Selecting the worker with the most free slots
+            var maxSlots = 0
+            var selected = "no_response"
+            result.forEach(element => {
+                if (element.free_slots > maxSlots) {
+                    maxSlots = element.free_slots
+                    selected = element.sender_id
+                }
+            });
+            resolve(selected)
+        }
     });
     return promise
 }
@@ -183,44 +243,50 @@ async function getFreeEngineSlot() {
 /**
  * Creates a new engine on a random Worker which has at least one free engine slot
  * @param {String} engineid ID of the new engine
- * @param {Broker} broker Broker on which the engine has the necessary artifacts
  * @param {String} informal_model
  * @param {String} process_model 
  * @param {String} eventRouterConfig 
+ * @param {String[]} stakeholders 
  */
-function createNewEngine(engineid, informal_model, process_model, eventRouterConfig) {
+function createNewEngine(engineid, informal_model, process_model, eventRouterConfig, stakeholders) {
     LOG.logSystem('DEBUG', `createNewEngine function called with engine ID: [${engineid}]`, module.id)
-    getFreeEngineSlot().then((value) => {
-        if (value != 'no_response') {
-            LOG.logSystem('DEBUG', `Free engine slot found on Worker: [${value}]`, module.id)
-            var msgPayload = {
-                "engine_id": engineid,
-                "mqtt_broker": BROKER.host,
-                "mqtt_port": BROKER.port,
-                "mqtt_user": BROKER.username,
-                "mqtt_password": BROKER.password,
-                "informal_model": informal_model,
-                "process_model": process_model,
-                "event_router_config": eventRouterConfig
+    var promise = new Promise(function (resolve, reject) {
+        getFreeEngineSlot().then((value) => {
+            if (value != 'no_response') {
+                LOG.logSystem('DEBUG', `Free engine slot found on Worker: [${value}]`, module.id)
+                var msgPayload = {
+                    "engine_id": engineid,
+                    "mqtt_broker": BROKER.host,
+                    "mqtt_port": BROKER.port,
+                    "mqtt_user": BROKER.username,
+                    "mqtt_password": BROKER.password,
+                    "informal_model": informal_model,
+                    "process_model": process_model,
+                    "event_router_config": eventRouterConfig,
+                    "stakeholders": stakeholders
+                }
+                var requestId = UUID.v4();
+                var message = {
+                    request_id: requestId,
+                    message_type: 'NEW_ENGINE',
+                    payload: msgPayload
+                }
+                MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
+                resolve("created")
             }
-            var requestId = UUID.v4();
-            var message = {
-                request_id: requestId,
-                message_type: 'NEW_ENGINE',
-                payload: msgPayload
+            else {
+                LOG.logSystem('WARNING', `No free engine slot found`, module.id)
+                resolve("no_free_slot")
             }
-            MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
-        }
-        else {
-            LOG.logSystem('WARNING', `No free engine slot found`, module.id)
-        }
+        })
     })
+    return promise
 }
 
 /**
  * Finds the location of a specified engine instance
  * @param {String} engineid Engine id of the engine intended to be found
- * @returns A PRomise, which contains the Worker ID, its hostname and RESP API port number, where the engine is placed,
+ * @returns A Promise, which contains the Worker ID, its hostname and RESP API port number, where the engine is placed,
  * If not found its value will be 'not_found' 
  */
 async function searchForEngine(engineid) {
@@ -231,7 +297,7 @@ async function searchForEngine(engineid) {
         "message_type": 'SEARCH',
         "payload": { "engine_id": engineid }
     }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         wait(ENGINE_SEARCH_WAITING_PERIOD).then(() => {
@@ -242,9 +308,9 @@ async function searchForEngine(engineid) {
 }
 
 /**
- * Finds Engine instances part of a Process instance
- * @param {*} processid Instance ID of the process
- * @returns Promise will contain an array of Engines sorted
+ * Finds Engine instances belonging to the specified Process instance
+ * @param {String} processid Instance ID of the process
+ * @returns Promise will contain an array of Engines sorted based on their name
  */
 async function searchForProcess(processid) {
     LOG.logSystem('DEBUG', `Searching for Process [${processid}]`, module.id)
@@ -254,7 +320,7 @@ async function searchForProcess(processid) {
         "message_type": 'PROCESS_SEARCH',
         "payload": { "process_id": processid }
     }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         REQUEST_BUFFERS.set(request_id, [])
@@ -263,19 +329,15 @@ async function searchForProcess(processid) {
             var result = REQUEST_BUFFERS.get(request_id) || []
             REQUEST_PROMISES.delete(request_id)
             REQUEST_BUFFERS.delete(request_id)
-
-            //Sorting the workers based on their name and adding index
             result.sort((a, b) => {
-                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
-                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
+                const nameA = a.name.toUpperCase();
+                const nameB = b.name.toUpperCase();
                 if (nameA < nameB) {
                     return -1;
                 }
                 if (nameA > nameB) {
                     return 1;
                 }
-
-                // names must be equal
                 return 0;
             });
             var cnt = 1
@@ -286,6 +348,55 @@ async function searchForProcess(processid) {
             resolve(result)
         })
     });
+    return promise
+}
+
+/**
+ * Delete a specified engine
+ * @param {string} engineid 
+ * @returns A promise to the result of the operaton. Will contain Worker defined content or "delete_error" in case of no Worker response
+ */
+async function deleteEngine(engineid) {
+    LOG.logSystem('DEBUG', `deleteEngine called for [${engineid}]`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'DELETE_ENGINE',
+        "payload": { "engine_id": engineid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        wait(PROCESS_SEARCH_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `searchForProcess waiting period elapsed for deleteEngine`, module.id)
+            resolve("delete_error")
+        })
+    });
+    return promise
+}
+
+/**
+ * Deletes all engines belonging to the specified Process Instance
+ * @param {string} processid 
+ * @returns A promise to the operation result. Will contain "ok", or "error" (considered to be error if not all engines has been verified to be removed)
+ */
+async function deleteProcess(processid) {
+    var promise = new Promise(async function (resolve, reject) {
+        searchForProcess(processid).then(async (engines) => {
+            var results = []
+            engines.forEach(element => {
+                results.push(deleteEngine(element['name']))
+            });
+            Promise.all(results).then((results) => {
+                results.forEach(element => {
+                    if (element != "deleted") {
+                        resolve('error')
+                    }
+                });
+                resolve("ok")
+            })
+        })
+    })
     return promise
 }
 
@@ -300,7 +411,7 @@ async function getWorkerList() {
         "request_id": request_id,
         "message_type": 'PING'
     }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         REQUEST_BUFFERS.set(request_id, [])
@@ -309,70 +420,15 @@ async function getWorkerList() {
             var result = REQUEST_BUFFERS.get(request_id) || []
             REQUEST_PROMISES.delete(request_id)
             REQUEST_BUFFERS.delete(request_id)
-
-            //Sorting the workers based on their name and adding index
             result.sort((a, b) => {
-                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
-                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
+                const nameA = a.name.toUpperCase();
+                const nameB = b.name.toUpperCase();
                 if (nameA < nameB) {
                     return -1;
                 }
                 if (nameA > nameB) {
                     return 1;
                 }
-
-                // names must be equal
-                return 0;
-            });
-            var cnt = 1
-            result.forEach(element => {
-                element['index'] = cnt
-                cnt += 1
-            });
-            resolve(result)
-        })
-    });
-    return promise
-}
-
-
-//Aggregator-related functions
-function createNewMonitoringActivity() {
-    //TODO
-}
-
-/**
- * Returns the list of online Aggregator instances
- * @returns Returns a promise, which will contain the list of Aggregator after AGGREGATOR_PONG_WAITING_PERIOD
- */
-async function getAggregatorList() {
-    LOG.logSystem('DEBUG', `getAggregatorList function called`, module.id)
-    var request_id = UUID.v4();
-    var message = {
-        "request_id": request_id,
-        "message_type": 'PING'
-    }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_AGGREGATOR, JSON.stringify(message))
-    var promise = new Promise(function (resolve, reject) {
-        REQUEST_PROMISES.set(request_id, resolve)
-        REQUEST_BUFFERS.set(request_id, [])
-        wait(AGGREGATOR_PONG_WAITING_PERIOD).then(() => {
-            LOG.logSystem('DEBUG', `getAggregatorList waiting period elapsed`, module.id)
-            var result = REQUEST_BUFFERS.get(request_id) || []
-            REQUEST_PROMISES.delete(request_id)
-            REQUEST_BUFFERS.delete(request_id)
-            //Sorting the aggregators based on their name and adding index
-            result.sort((a, b) => {
-                const nameA = a.name.toUpperCase(); // ignore upper and lowercase
-                const nameB = b.name.toUpperCase(); // ignore upper and lowercase
-                if (nameA < nameB) {
-                    return -1;
-                }
-                if (nameA > nameB) {
-                    return 1;
-                }
-
-                // names must be equal
                 return 0;
             });
             var cnt = 1
@@ -388,7 +444,7 @@ async function getAggregatorList() {
 
 /**
  * Get the list of Engines deployed on a specified Worker
- * @param {*} workername 
+ * @param {String} workername 
  * @returns 
  */
 function getWorkerEngineList(workername) {
@@ -410,8 +466,8 @@ function getWorkerEngineList(workername) {
 }
 
 /**
- * Get eGSM model to visualize on Front end
- * @param {*} engineid 
+ * Get eGSM model of an engine to visualize on Front end
+ * @param {String} engineid 
  * @returns 
  */
 function getEngineCompleteDiagram(engineid) {
@@ -421,7 +477,7 @@ function getEngineCompleteDiagram(engineid) {
         "message_type": 'GET_COMPLETE_DIAGRAM',
         "payload": { engine_id: engineid }
     }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
@@ -432,8 +488,8 @@ function getEngineCompleteDiagram(engineid) {
 }
 
 /**
- * Get eGSM model to visualize on Front end
- * @param {*} engineid 
+ * Get eGSM model of an engine to visualize on Front end
+ * @param {String} engineid 
  * @returns 
  */
 function getEngineCompleteNodeDiagram(engineid) {
@@ -443,7 +499,7 @@ function getEngineCompleteNodeDiagram(engineid) {
         "message_type": 'GET_COMPLETE_NODE_DIAGARM',
         "payload": { engine_id: engineid }
     }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_OUT_WORKER, JSON.stringify(message))
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
         wait(ENGINE_PONG_WAITING_PERIOD).then(() => {
@@ -454,18 +510,243 @@ function getEngineCompleteNodeDiagram(engineid) {
 }
 
 
+
+// Aggregator-related functions
+/**
+ * Creates a new Monitoring activity on a specified Aggregator
+ * @param {String} activityid Desired Job ID
+ * @param {Object} definition Job definition object, containing all required fields 
+ * @param {String} aggregatorid ID of desired Aggregator
+ * @returns 
+ */
+function createNewMonitoringActivity(activityid, definition, aggregatorid) {
+    LOG.logSystem('DEBUG', `createNewMonitoringActivity function called`, module.id)
+    var promise = new Promise(function (resolve, reject) {
+        var request_id = UUID.v4();
+        var message = {
+            "request_id": request_id,
+            "message_type": 'NEW_MONITORING_ACTIVITY',
+            "payload": {
+                "activity_id": activityid,
+                "definition": definition
+            }
+        }
+        MQTT.publishTopic(BROKER.host, BROKER.port, aggregatorid, JSON.stringify(message))
+        resolve("created")
+    });
+    return promise
+}
+
+/**
+ * Returns the list of online Aggregator instances
+ * @returns Returns a promise, which will contain the list of Aggregators sorted by names
+ */
+async function getAggregatorList() {
+    LOG.logSystem('DEBUG', `getAggregatorList function called`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'PING'
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_AGGREGATORS, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        REQUEST_BUFFERS.set(request_id, [])
+        wait(AGGREGATOR_PONG_WAITING_PERIOD).then(() => {
+            LOG.logSystem('DEBUG', `getAggregatorList waiting period elapsed`, module.id)
+            var result = REQUEST_BUFFERS.get(request_id) || []
+            REQUEST_PROMISES.delete(request_id)
+            REQUEST_BUFFERS.delete(request_id)
+            result.sort((a, b) => {
+                const nameA = a.name.toUpperCase();
+                const nameB = b.name.toUpperCase();
+                if (nameA < nameB) {
+                    return -1;
+                }
+                if (nameA > nameB) {
+                    return 1;
+                }
+                return 0;
+            });
+            var cnt = 1
+            result.forEach(element => {
+                element['index'] = cnt
+                cnt += 1
+            });
+            resolve(result)
+        })
+    });
+    return promise
+}
+
+/**
+ * Publishing a Process Lifecycle events to notify interested Aggregators
+ * @param {string} type Type of lifecycle event: 'created' or 'destructed'
+ * @param {string} processtype Type of process
+ * @param {string} instnaceid Process Instnace ID
+ */
+async function publishProcessLifecycleEvent(type, process_instance_id, process_type, stakeholders) {
+    var message = {
+        type: type,
+        process: {
+            process_type: process_type,
+            instance_id: process_instance_id,
+            stakeholders: stakeholders
+        }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_PROCESS_LIFECYCLE, JSON.stringify(message))
+}
+
+/**
+ * Getting free Job Slots on online Aggregators
+ * @returns Returns a Promise, which will contain an Aggregator ID with at least one free Job slot, or 'no_response' in case of no free slot
+ */
+async function getFreeJobSlot() {
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'NEW_JOB_SLOT'
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_AGGREGATORS, JSON.stringify(message))
+
+    var promise = new Promise(async function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        REQUEST_BUFFERS.set(request_id, [])
+        await wait(FREE_SLOT_WAITING_PERIOD)
+        LOG.logSystem('DEBUG', `getFreeJobSlot waiting period elapsed`, module.id)
+        var result = REQUEST_BUFFERS.get(request_id) || []
+        REQUEST_PROMISES.delete(request_id)
+        REQUEST_BUFFERS.delete(request_id)
+        if (result.length == 0) {
+            resolve('no_response')
+        }
+        else {
+            var maxSlots = 0
+            var selected = "no_response"
+            result.forEach(element => {
+                if (element.free_slots > maxSlots) {
+                    maxSlots = element.free_slots
+                    selected = element.sender_id
+                }
+            });
+            resolve(selected)
+        }
+    });
+    return promise
+}
+
+/**
+ * Creating a new Job instance on an automatically selected Aggregator
+ * @param {Object} jobconfig Configuration of the job containing all required fields
+ * @returns A promise will contain the result of the operation: 'created'/'no_free_slot'/'error'
+ */
+async function createNewJob(jobconfig) {
+    LOG.logSystem('DEBUG', `createNewJob function called with engine ID`, module.id)
+    var promise = new Promise(function (resolve, reject) {
+        getFreeJobSlot().then((value) => {
+            if (value != 'no_response') {
+                LOG.logSystem('DEBUG', `Free job slot found on Aggregator: [${value}]`, module.id)
+                var msgPayload = {
+                    job_config: jobconfig,
+                }
+                var requestId = UUID.v4();
+                var message = {
+                    request_id: requestId,
+                    message_type: 'NEW_JOB',
+                    payload: msgPayload
+                }
+                MQTT.publishTopic(BROKER.host, BROKER.port, value, JSON.stringify(message))
+                resolve("created")
+            }
+            else {
+                LOG.logSystem('WARNING', `No free job slot found`, module.id)
+                resolve("no_free_slot")
+            }
+        })
+    })
+    return promise
+}
+
+/**
+ * Finds a Job instance specified by its ID
+ * @param {String} jobid ID of the requested Job
+ * @returns A promise will contain information about the Aggregator deploying the job, or 'not_found'
+ */
+async function searchForJob(jobid) {
+    LOG.logSystem('DEBUG', `Searching for Job [${jobid}]`, module.id)
+    var request_id = UUID.v4();
+    var message = {
+        "request_id": request_id,
+        "message_type": 'SEARCH',
+        "payload": { "job_id": jobid }
+    }
+    MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_AGGREGATORS, JSON.stringify(message))
+    var promise = new Promise(function (resolve, reject) {
+        REQUEST_PROMISES.set(request_id, resolve)
+        wait(ENGINE_SEARCH_WAITING_PERIOD).then(() => {
+            resolve('not_found')
+        })
+    });
+    return promise
+}
+
+/**
+ * Can be used to subscribe to a defined MQTT topic
+ * In case of a new message from the topic a new event will be emitted by the EVENT_EMITTER
+ * Subscription to the same topic can be performed multiple times, in this case intead of multiply subscription
+ * the function wil just increase a counter 
+ * @param {String} topic Topic to subscribe
+ */
+async function subscribeNotificationTopic(topic) {
+    if (!NOTIFICATION_TOPICS.has(topic)) {
+        MQTT.subscribeTopic(BROKER.host, BROKER.port, topic)
+        NOTIFICATION_TOPICS.set(topic, 1)
+    }
+    else {
+        NOTIFICATION_TOPICS.set(topic, NOTIFICATION_TOPICS.get(topic) + 1)
+    }
+}
+
+/**
+ * Unsubscribe from a topic where the system subscribed to (by subscribeNotificationTopic function)
+ * If the subscribeNotificationTopic function has been called multiple times for the same topic, then this
+ * function will perform the unsusbscription only after the last subscription has been undone
+ * @param {String} topic Topic to unsubscribe from 
+ */
+async function unsubscribeNotificationTopic(topic) {
+    if (NOTIFICATION_TOPICS.has(topic)) {
+        if (NOTIFICATION_TOPICS.get(topic) == 1) {
+            NOTIFICATION_TOPICS.delete(topic)
+            MQTT.unsubscribeTopic(BROKER.host, BROKER.port, topic)
+        }
+        else {
+            NOTIFICATION_TOPICS.set(topic, NOTIFICATION_TOPICS.get(topic) - 1)
+        }
+    }
+}
+
+
 module.exports = {
+    EVENT_EMITTER: EVENT_EMITTER,
     initBrokerConnection: initBrokerConnection,
 
     createNewEngine: createNewEngine,
+    deleteProcess: deleteProcess,
     searchForEngine: searchForEngine,
     searchForProcess: searchForProcess,
     getWorkerList: getWorkerList,
     getWorkerEngineList: getWorkerEngineList,
+    getEngineCompleteDiagram: getEngineCompleteDiagram,
+    getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram,
 
     createNewMonitoringActivity: createNewMonitoringActivity,
     getAggregatorList: getAggregatorList,
+    publishProcessLifecycleEvent: publishProcessLifecycleEvent,
 
-    getEngineCompleteDiagram: getEngineCompleteDiagram,
-    getEngineCompleteNodeDiagram: getEngineCompleteNodeDiagram
+    createNewJob: createNewJob,
+    searchForJob: searchForJob,
+
+    subscribeNotificationTopic: subscribeNotificationTopic,
+    unsubscribeNotificationTopic: unsubscribeNotificationTopic,
+
 }

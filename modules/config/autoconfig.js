@@ -1,22 +1,21 @@
-var fs = require('fs');
+/**
+ * Module to handle file-defined configurations
+ * The module functions need an object as argument (parsed XML, or JSON) and it 
+ * executes all necessary configuration-related operation (creating resources, new process etc.) 
+ */
 
-var RESOURCEMAN = require('../resourcemanager/resourcemanager')
 var SOCKET = require('../communication/socketserver')
 var LOG = require('../egsm-common/auxiliary/logManager')
-var AUX = require('../egsm-common/auxiliary/auxiliary')
+const { Broker, ConnectionConfig } = require('../egsm-common/auxiliary/primitives')
 
 module.id = 'AUTOCONF'
 
-var PROCESS_CREATION_TIMEOUT = 200
-
-function applyBasicConfig(config) {
-    //Add Brokers
-    var brokers = config['configuration']['broker']
-    for (var i in brokers) {
-        if (!RESOURCEMAN.registerBroker(brokers[i]['host'][0], brokers[i]['port'][0], brokers[i]['username'][0], brokers[i]['password'][0])) {
-            LOG.logSystem('FATAL', 'Could not perform initialization defined in config', module.id)
-        }
+function parseConnectionConfig(config) {
+    var broker = config['configuration'].broker[0] || undefined
+    if(broker != undefined){
+        return new ConnectionConfig(new Broker(broker.host[0],broker.port[0],broker.username[0],broker.password[0]))
     }
+    return undefined
 }
 
 async function applyAdvancedConfig(config) {
@@ -31,8 +30,7 @@ async function applyAdvancedConfig(config) {
         for (var index = 0; index < quantity; index++) {
             var instanceName = instanceNamePrefix + (index + 1).toString()
             console.log(index)
-            SOCKET.createProcessInstance(processType, instanceName, bpmnJob)
-            await AUX.sleep(PROCESS_CREATION_TIMEOUT)
+            await SOCKET.createProcessInstance(processType, instanceName, bpmnJob)
         }
 
         if (bpmnJob) {
@@ -42,6 +40,6 @@ async function applyAdvancedConfig(config) {
 }
 
 module.exports = {
-    applyBasicConfig: applyBasicConfig,
+    parseConnectionConfig: parseConnectionConfig,
     applyAdvancedConfig: applyAdvancedConfig
 }

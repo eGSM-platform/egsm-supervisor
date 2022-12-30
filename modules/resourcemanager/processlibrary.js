@@ -1,19 +1,24 @@
+/**
+ * Process Library is intended to serve as a storage space of process definitions
+ * After initialization the module provides a fast and easy way to get process definitions
+ */
 var fs = require('fs')
 var xml2js = require('xml2js');
-
 var LOG = require('../egsm-common/auxiliary/logManager')
+const { Perspective, ProcessType } = require('../egsm-common/auxiliary/primitives')
 var parseString = xml2js.parseString;
 
 module.id = 'PROCESSLIB'
 
 const LIBRARY_FOLDER = './process_library/'
-var PROCESS_TYPE_NUMBER = 0
 
-var PROCESS_TYPES = new Map()
+var PROCESS_TYPES = new Map() //Storage space to store all process type definitions
 
 
 /**
  * Loads all Proccess Types from the LIBRARY_FOLDER
+ * File representations are stored in RAM (no adhoc file operations)
+ * Should be called right after startup and (currently) not intended to call it in runtime
  */
 function loadProcessTypes() {
     LOG.logSystem('DEBUG', 'Loading Process Library', module.id)
@@ -42,29 +47,31 @@ function loadProcessTypes() {
                     var description = process_config['description'][0]
                     var bpmn_model = fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + process_config['bpmn-model'][0]['model'][0], 'utf8');
                     var perspectives = []
+                    var stakeholders = new Set()
 
                     //Iterating through perspectives
                     process_config['perspective'].forEach(element => {
-                        perspectives.push({
-                            name: element['name'][0],
-                            egsm_model: fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['egsm-model'][0], 'utf8'),
-                            info_model: fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['info-model'][0], 'utf8'),
-                            bindings: fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['bindings'][0], 'utf8'),
+                        perspectives.push(new Perspective(element['name'][0],
+                            fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['bpmn-model'][0], 'utf8'),
+                            fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['egsm-model'][0], 'utf8'),
+                            fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['info-model'][0], 'utf8'),
+                            fs.readFileSync(LIBRARY_FOLDER + 'process_' + index.toString() + "/" + element['bindings'][0], 'utf8')))
+                    });
+
+                    //Getting all Stakeholders from binding files
+                    perspectives.forEach(element => {
+                        parseString(element.bindings, function (err, bindingObj) {
+                            for (var key in bindingObj['martifact:definitions']['martifact:stakeholder']) {
+                                stakeholders.add(bindingObj['martifact:definitions']['martifact:stakeholder'][key]['$'].name)
+                            }
                         })
                     });
-                    var currentProcess = {
-                        name: name,
-                        description: description,
-                        bpmn_model: bpmn_model,
-                        perspectives: perspectives
-                    }
+                    var currentProcess = new ProcessType(name, stakeholders, description, bpmn_model, perspectives)
                     PROCESS_TYPES.set(name, currentProcess)
                 })
             } catch (err) {
                 LOG.logSystem('FATAL', `Error while reading initialization file: ${err}`, module.id)
             }
-
-            PROCESS_TYPE_NUMBER += 1
             index += 1
             continue
         }
@@ -74,8 +81,10 @@ function loadProcessTypes() {
 }
 
 /**
- * 
- * @returns A list of available Process types, containing their names and description
+ * Get all available process types
+ * The returning object contains only basic informations about the process type
+ * Use getProcessType() instead if you need the process definition files
+ * @returns {ProcessType[]} A list of available Process types, containing their names and description
  */
 function getProcessTypeList() {
     var result = []
@@ -91,7 +100,7 @@ function getProcessTypeList() {
 /**
  * Gets a Process Type definition from the module specified by process_type_name
  * @param {*} process_type_name ID of the Process Type
- * @returns Returns an object containing all relevant data to the Process Type
+ * @returns {ProcessType || string} Returns a ProcessType object or 'not_found'
  */
 function getProcessType(process_type_name) {
     if (PROCESS_TYPES.has(process_type_name)) {
@@ -103,7 +112,6 @@ function getProcessType(process_type_name) {
 loadProcessTypes()
 
 module.exports = {
-    loadProcessTypes: loadProcessTypes,
     getProcessTypeList: getProcessTypeList,
     getProcessType: getProcessType,
 }
