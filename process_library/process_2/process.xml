@@ -9,6 +9,7 @@
 
     <perspective>
         <name>Truck</name>
+        <bpmn-model>models/bpmn_truck.bpmn</bpmn-model>
         <egsm-model>models/egsm_truck.xml</egsm-model>
         <info-model>models/info_truck.xsd</info-model>
         <bindings>models/binding_truck.xml</bindings>
@@ -16,6 +17,7 @@
 
     <perspective>
         <name>Train</name>
+        <bpmn-model>models/bpmn_train.bpmn</bpmn-model>
         <egsm-model>models/egsm_train.xml</egsm-model>
         <info-model>models/info_train.xsd</info-model>
         <bindings>models/binding_train.xml</bindings>
@@ -23,6 +25,7 @@
 
     <perspective>
         <name>Container</name>
+        <bpmn-model>models/bpmn_container.bpmn</bpmn-model>
         <egsm-model>models/egsm_container.xml</egsm-model>
         <info-model>models/info_container.xsd</info-model>
         <bindings>models/binding_container.xml</bindings>
