@@ -29,6 +29,7 @@ const MODULE_STAKEHOLDERS = 'stakeholder_detail'
 const MODULE_NOTIFICATIONS = 'notifications'
 const MODULE_NEW_PROCESS_GROUP = 'new_process_group'
 const MODULE_AGGREGATORS = 'aggregators'
+const MODULE_PROCESS_TYPE_DETAIL = 'process_type_detail'
 
 var sessions = new Map() //session_id -> session related data
 
@@ -158,6 +159,10 @@ async function messageHandler(message, sessionid) {
                 }
                 else if (msgObj['payload']['type'] == 'subscribe_notifications') {
                     return setNotificationSubscriptions(msgObj['payload']['stakeholders'], sessionid)
+                }
+            case MODULE_PROCESS_TYPE_DETAIL:
+                if (msgObj['payload']['type'] == 'get_process_type_aggregation') {
+                    return getProcessTypeAggregation(msgObj['payload']['process_type'])
                 }
         }
     }
@@ -308,18 +313,19 @@ async function deleteProcessInstance(process_type, process_instance_id) {
  */
 function getProcessTypeList() {
     var promise = new Promise(async function (resolve, reject) {
-        var response = {
-            module: MODULE_PROCESS_LIBRARY,
-            payload: {
-                type: 'process_type_list',
-                process_types: PROCESSLIB.getProcessTypeList(),
+        DDB.readAllProcessTypes().then((processtypelist) => {
+            var response = {
+                module: MODULE_PROCESS_LIBRARY,
+                payload: {
+                    type: 'process_type_list',
+                    process_types: processtypelist
+                }
             }
-        }
-        resolve(response)
+            resolve(response)
+        })
     });
     return promise
 }
-
 //TODO: Add process type level statistics retrieval function (extension of getProcessTypeList())
 
 /**
@@ -486,6 +492,43 @@ function setNotificationSubscriptions(stakeholders, sessionid) {
     return promise
 }
 
+async function getProcessTypeAggregation(processtype) {
+    var promise = new Promise(async function (resolve, reject) {
+        var processDb = await DDB.readProcessType(processtype)
+
+        //all bpmn perspective
+        //bpmn job cnt
+        //instance cnt
+        //statistics for each bpmn perspectives
+        
+        //look for a real-time aggregation job
+        //if the job found we need the real time statistocs for each bpmn perspectives
+        var perspectives = []
+        processDb.definition.perspectives.forEach(perspective => {
+            perspectives.push({
+                name: perspective.name,
+                bpmn_xml: perspective.bpmn_diagram,
+                statistics: processDb.statistics[perspective.name]
+            })
+        });
+        var response = {
+            module: MODULE_PROCESS_TYPE_DETAIL,
+            payload: {
+                result: 'ok',
+                process_type: processDb.process_type,
+                historic: {
+                    bpmn_job_cnt: processDb.bpmn_job_cnt,
+                    instance_cnt: processDb.instance_cnt,
+                    perspectives: perspectives
+                },
+                real_time: undefined
+            }
+        }
+        resolve(response)
+    });
+    return promise
+}
+
 /**
  * Creating a new Artifact in the Database
  * @param {Object} artifact Object containing all datafields necessary for the new Artifact 
@@ -615,68 +658,73 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                 resolve(response)
             }
             else {
-                var processDetails = PROCESSLIB.getProcessType(process_type)
-                var creation_results = []
-                var monitoredEngines = []
-                processDetails['perspectives'].forEach(async element => {
-                    var engineName = process_type + '/' + instance_name + '__' + element['name']
-                    creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'], [...processDetails.stakeholders]))
-                    monitoredEngines.push(engineName)
-                });
-
-                await Promise.all(creation_results).then(async (promise_array) => {
-                    var aggregatedResult = true
-                    promise_array.forEach(element => {
-                        if (element != "created") {
-                            aggregatedResult = false
-                        }
+                DDB.readProcessType(process_type).then(async (processEntry) => {
+                    var processDetails = processEntry.definition
+                    var creation_results = []
+                    var monitoredEngines = []
+                    processDetails['perspectives'].forEach(async element => {
+                        var engineName = process_type + '/' + instance_name + '__' + element['name']
+                        creation_results.push(MQTTCOMM.createNewEngine(engineName, element['info_model'], element['egsm_model'], element['bindings'], processDetails.stakeholders))
+                        monitoredEngines.push(engineName)
                     });
-                    var job_results = []
-                    //Creating one job, includig all perpsectives
-                    if (aggregatedResult && bpmn_job) {
-                        var jobId = process_type + '/' + instance_name + '/bpmn_job'
-                        var jobConfig = {
-                            id: jobId,
-                            type: 'bpmn-job',
-                            process_type: process_type,
-                            //process_instance_id: instance_name,
-                            monitored: monitoredEngines,
-                            perspectives: processDetails['perspectives'],
-                            notificationrules: 'NOTIFY_ALL'
-                        }
-                        job_results.push(createJobInstance(jobId, jobConfig))
-                    }
-                    await Promise.all(job_results).then((job_creation_results) => {
-                        var jobAggregatedResult = true
-                        job_creation_results.forEach(element => {
-                            if (element.payload.result != "created") {
-                                jobAggregatedResult = false
+
+                    await Promise.all(creation_results).then(async (promise_array) => {
+                        var aggregatedResult = true
+                        promise_array.forEach(element => {
+                            if (element != "created") {
+                                aggregatedResult = false
                             }
                         });
-                        if (aggregatedResult && jobAggregatedResult) {
-                            response.payload.result = "ok"
-                            //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
-                            DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, 'localhost', 1883)
-                            MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
-                            resolve(response)
+                        var job_results = []
+                        //Creating one job, includig all perpsectives
+                        if (aggregatedResult && bpmn_job) {
+                            var jobId = process_type + '/' + instance_name + '/bpmn_job'
+                            var jobConfig = {
+                                id: jobId,
+                                type: 'bpmn-job',
+                                process_type: process_type,
+                                //process_instance_id: instance_name,
+                                monitored: monitoredEngines,
+                                perspectives: processDetails['perspectives'],
+                                notificationrules: 'NOTIFY_ALL'
+                            }
+                            job_results.push(createJobInstance(jobId, jobConfig))
                         }
-                        //Engines are created, but the requested related jobs are not ok
-                        else if (aggregatedResult && !jobAggregatedResult) {
-                            response.payload.result = "engines_ok"
-                            //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
-                            DDB.writeNewProcessInstance(process_type, instance_name, [...processDetails.stakeholders], Date.now() / 1000, 'localhost', 1883)
-                            MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, [...processDetails.stakeholders])
-                            resolve(response)
-                        }
-                        else {
-                            response.payload.result = "backend_error"
-                            //Make sure we clean up in case any member engine has been created
-                            deleteProcessInstance(process_type, instance_name).then(() => {
+                        await Promise.all(job_results).then((job_creation_results) => {
+                            var jobAggregatedResult = true
+                            job_creation_results.forEach(element => {
+                                if (element.payload.result != "created") {
+                                    jobAggregatedResult = false
+                                }
+                            });
+                            if (aggregatedResult && jobAggregatedResult) {
+                                response.payload.result = "ok"
+                                //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                                DDB.writeNewProcessInstance(process_type, instance_name, processDetails.stakeholders, Date.now() / 1000, 'localhost', 1883)
+                                DDB.increaseProcessTypeInstanceCounter(process_type)
+                                MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, processDetails.stakeholders)
                                 resolve(response)
-                            })
-                        }
-                    })
+                            }
+                            //Engines are created, but the requested related jobs are not ok
+                            else if (aggregatedResult && !jobAggregatedResult) {
+                                response.payload.result = "engines_ok"
+                                //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                                DDB.writeNewProcessInstance(process_type, instance_name, processDetails.stakeholders, Date.now() / 1000, 'localhost', 1883)
+                                DDB.increaseProcessTypeInstanceCounter(process_type)
+                                DDB.increaseProcessTypeBpmnJobCounter(process_type)
+                                MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, processDetails.stakeholders)
+                                resolve(response)
+                            }
+                            else {
+                                response.payload.result = "backend_error"
+                                //Make sure we clean up in case any member engine has been created
+                                deleteProcessInstance(process_type, instance_name).then(() => {
+                                    resolve(response)
+                                })
+                            }
+                        })
 
+                    })
                 })
             }
         })

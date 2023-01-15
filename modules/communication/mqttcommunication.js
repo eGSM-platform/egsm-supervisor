@@ -25,6 +25,7 @@ const FREE_SLOT_WAITING_PERIOD = 250
 const ENGINE_SEARCH_WAITING_PERIOD = 500
 const ENGINE_PONG_WAITING_PERIOD = 500
 const PROCESS_SEARCH_WAITING_PERIOD = 500
+const DELETE_ENGINE_WAITING_PERIOD = 2000
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
 //Containers to store pending requests and store replies in case of multi-party cooperation
@@ -367,7 +368,7 @@ async function deleteEngine(engineid) {
     MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
-        wait(PROCESS_SEARCH_WAITING_PERIOD).then(() => {
+        wait(DELETE_ENGINE_WAITING_PERIOD).then(() => {
             LOG.logSystem('DEBUG', `searchForProcess waiting period elapsed for deleteEngine`, module.id)
             resolve("delete_error")
         })

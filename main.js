@@ -21,6 +21,7 @@ DBCONFIG.initDatabaseConnection('localhost',9000,'local','fakeMyKeyId','fakeSecr
 
 //DBCONFIG.deleteTables()
 //DBCONFIG.initTables()
+//LIBRARY.exportProcessLibraryToDatabase()
 
 LOG.logSystem('DEBUG', 'Supervisor started', module.id)
 if (process.argv.length == 3) {

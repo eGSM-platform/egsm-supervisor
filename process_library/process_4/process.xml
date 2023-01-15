@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<process-type>
+    <name>Running_example</name>
+    <description>The original process from the SMARTifact research</description>
+
+    <bpmn-model>
+        <model>models/process.bpmn</model>
+    </bpmn-model>
+
+    <perspective>
+        <name>Container</name>
+        <bpmn-model>models/bpmn_container.bpmn</bpmn-model>
+        <egsm-model>models/egsm_container.xml</egsm-model>
+        <info-model>models/info_container.xsd</info-model>
+        <bindings>models/binding_container.xml</bindings>
+    </perspective>
+</process-type>
