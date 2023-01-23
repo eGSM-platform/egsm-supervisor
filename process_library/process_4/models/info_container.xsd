@@ -1,44 +1,19 @@
-<?xml version="1.0" encoding="UTF-8"?><xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" attributeFormDefault="unqualified" elementFormDefault="qualified">
-<xs:element name="b_container_overheated">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="Container">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-<xs:attribute name="status" type="xs:string" use="optional"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="Truck">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-<xs:attribute name="status" type="xs:string" use="optional"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="e_processended">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="ce_c_portion_started">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="te_c_portion_ended">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="te_process_failed">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-</xs:complexType>
-</xs:element>
-<xs:element name="s_processstarted">
-<xs:complexType>
-<xs:attribute name="timestamp" type="xs:dateTime" use="required"/>
-</xs:complexType>
-</xs:element>
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" attributeFormDefault="unqualified" elementFormDefault="qualified">
+    <xs:element name="Truck">
+        <xs:complexType>
+            <xs:attribute name="timestamp" type="xs:dateTime" use="required" />
+            <xs:attribute name="status" type="xs:string" use="optional" />
+        </xs:complexType>
+    </xs:element>
+    <xs:element name="process_ended">
+        <xs:complexType>
+            <xs:attribute name="timestamp" type="xs:dateTime" use="required" />
+        </xs:complexType>
+    </xs:element>
+    <xs:element name="process_started">
+        <xs:complexType>
+            <xs:attribute name="timestamp" type="xs:dateTime" use="required" />
+        </xs:complexType>
+    </xs:element>
 </xs:schema>

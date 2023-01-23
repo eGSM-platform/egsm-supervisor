@@ -1,218 +1,147 @@
-<?xml version="1.0" encoding="UTF-8"?><ca:CompositeApplicationType xmlns:ca="http://siena.ibm.com/model/CompositeApplication" version="2.0" name="application">
+<?xml version="1.0" encoding="UTF-8"?>
+<ca:CompositeApplicationType xmlns:ca="http://siena.ibm.com/model/CompositeApplication" version="2.0" name="Definitions_1_application">
   <ca:EventModel id="Definitions_1_eventModel" name="Definitions_1_eventModel">
-    <ca:Event id="b_container_overheated" name="b_container_overheated"/>
-    <ca:Event id="Container_e" name="Container_e"/>
-    <ca:Event id="Container_l" name="Container_l"/>
-    <ca:Event id="Truck_e" name="Truck_e"/>
-    <ca:Event id="Truck_l" name="Truck_l"/>
-    <ca:Event id="e_processended" name="e_processended"/>
-    <ca:Event id="ce_c_portion_started" name="ce_c_portion_started"/>
-    <ca:Event id="te_c_portion_ended" name="te_c_portion_ended"/>
-    <ca:Event id="te_process_failed" name="te_process_failed"/>
-    <ca:Event id="s_processstarted" name="s_processstarted"/>
+    <ca:Event id="Truck_e" name="Truck_e" />
+    <ca:Event id="Truck_l" name="Truck_l" />
+    <ca:Event id="process_ended" name="process_ended" />
+    <ca:Event id="process_started" name="process_started" />
   </ca:EventModel>
-  <ca:Component id="model" name="model">
+  <ca:Component id="Definitions_1">
     <ca:InformationModel id="infoModel" rootDataItemId="infoModel">
-      <ca:DataItem id="infoModel" rootElement="infoModel" schemaUri="data/infoModel.xsd"/>
+      <ca:DataItem id="infoModel" rootElement="infoModel" schemaUri="data/infoModel.xsd" />
     </ca:InformationModel>
-    <ca:GuardedStageModel>
-<ca:Stage id="containerprocess" name="Container Process">
-        <ca:DataFlowGuard eventIds="s_processstarted" expression="GSM.isEventOccurring(s_processstarted)" id="containerprocess_dfg1" language="JEXL" name="containerprocess Data Flow Guard 1"/>
-        <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedUnhooked])) and GSM.isEventOccurring(Container_e)" id="containerprocess_dfg2" language="JEXL" name="containerprocess Data Flow Guard 2"/>
-        <ca:DataFlowGuard eventIds="ce_c_portion_started" expression="GSM.isEventOccurring(ce_c_portion_started)" id="containerprocess_dfg3" language="JEXL" name="containerprocess Data Flow Guard 3"/>
-        <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [ClosedUnhooked])) and (({infoModel./infoModel/Truck/status} == [ManufacturerStill])) and GSM.isEventOccurring(Container_e)" id="containerprocess_dfg4" language="JEXL" name="containerprocess Data Flow Guard 4"/>
-        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Container/status} == [ClosedUnhooked])) and (({infoModel./infoModel/Truck/status} == [ManufacturerStill])) and GSM.isEventOccurring(Truck_e)" id="containerprocess_dfg5" language="JEXL" name="containerprocess Data Flow Guard 5"/>
-        <ca:DataFlowGuard eventIds="te_process_failed" expression="GSM.isEventOccurring(te_process_failed)" id="containerprocess_dfg6" language="JEXL" name="containerprocess Data Flow Guard 6"/>
-        <ca:DataFlowGuard eventIds="e_processended" expression="GSM.isEventOccurring(e_processended)" id="containerprocess_dfg7" language="JEXL" name="containerprocess Data Flow Guard 7"/>
-        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [ManufacturerMoving])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Truck_e)" id="containerprocess_dfg8" language="JEXL" name="containerprocess Data Flow Guard 8"/>
-        <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Truck/status} == [ManufacturerMoving])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_e)" id="containerprocess_dfg9" language="JEXL" name="containerprocess Data Flow Guard 9"/>
-        <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedHooked])) and GSM.isEventOccurring(Container_e)" id="containerprocess_dfg10" language="JEXL" name="containerprocess Data Flow Guard 10"/>
-        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Truck_e)" id="containerprocess_dfg11" language="JEXL" name="containerprocess Data Flow Guard 11"/>
-        <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_e)" id="containerprocess_dfg12" language="JEXL" name="containerprocess Data Flow Guard 12"/>
-        <ca:DataFlowGuard eventIds="te_c_portion_ended" expression="GSM.isEventOccurring(te_c_portion_ended)" id="containerprocess_dfg13" language="JEXL" name="containerprocess Data Flow Guard 13"/>
-        <ca:Milestone eventIds="" id="containerprocess_m1" name="containerprocess Milestone 1">
-          <ca:Condition expression="GSM.isMilestoneAchieved(s_processstarted_m1) and GSM.isMilestoneAchieved(ParallelGateway_1_m1) and GSM.isMilestoneAchieved(b_container_overheated_exception_m1) and (GSM.isMilestoneAchieved(attach_container_m1)) and (GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1) or GSM.isMilestoneAchieved(drive_to_terminal_m1)) and GSM.isMilestoneAchieved(e_processended_m1)" id="containerprocess_m1_c" language="JEXL" name="containerprocess Milestone 1 Condition"/>
+    <ca:GuardedStageModel id="example_GSM" name="Default Process">
+      <ca:Stage id="example" name="Default Process">
+        <ca:DataFlowGuard eventIds="process_started" expression="GSM.isEventOccurring(process_started)" id="example_dfg1" language="JEXL" name="example Data Flow Guard 1" />
+        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrStill])) and GSM.isEventOccurring(Truck_e)" id="example_dfg2" language="JEXL" name="example Data Flow Guard 2" />
+        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrMoving]) or ({infoModel./infoModel/Truck/status} == [HwGBMoving])) and GSM.isEventOccurring(Truck_e)" id="example_dfg3" language="JEXL" name="example Data Flow Guard 3" />
+        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwGBStill])) and GSM.isEventOccurring(Truck_e)" id="example_dfg4" language="JEXL" name="example Data Flow Guard 4" />
+        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [ChrStill])) and GSM.isEventOccurring(Truck_e)" id="example_dfg5" language="JEXL" name="example Data Flow Guard 5" />
+        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_e)" id="example_dfg6" language="JEXL" name="example Data Flow Guard 6" />
+        <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwStill])) and GSM.isEventOccurring(Truck_e)" id="example_dfg7" language="JEXL" name="example Data Flow Guard 7" />
+        <ca:DataFlowGuard eventIds="process_ended" expression="GSM.isEventOccurring(process_ended)" id="example_dfg8" language="JEXL" name="example Data Flow Guard 8" />
+        <ca:Milestone eventIds="" id="example_m1" name="example Milestone 1">
+          <ca:Condition expression="GSM.isMilestoneAchieved(ExclusiveGateway_1_m1) and GSM.isMilestoneAchieved(ExclusiveGateway_7_m1) and (GSM.isMilestoneAchieved(TakeChannelTunnel_m1)) and (GSM.isMilestoneAchieved(LoadContainer_m1)) and GSM.isMilestoneAchieved(process_started_m1) and GSM.isMilestoneAchieved(process_ended_m1)" id="example_m1_c" language="JEXL" name="example Milestone 1 Condition" />
         </ca:Milestone>
-        <ca:SubStage id="s_processstarted" name="Process started">
-          <ca:DataFlowGuard eventIds="s_processstarted" expression="GSM.isEventOccurring(s_processstarted)" id="s_processstarted_dfg1" language="JEXL" name="s_processstarted Data Flow Guard 1"/>
-          <ca:Milestone eventIds="s_processstarted" id="s_processstarted_m1" name="s_processstarted Milestone 1">
-            <ca:Condition expression="GSM.isEventOccurring(s_processstarted)" id="s_processstarted_m1_c" language="JEXL" name="s_processstarted Milestone 1 Condition"/>
+        <ca:SubStage id="ExclusiveGateway_1" name="ExclusiveGateway_1 SequenceFlow_13">
+          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrMoving]) or ({infoModel./infoModel/Truck/status} == [HwGBMoving])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_1_dfg1" language="JEXL" name="ExclusiveGateway_1 Data Flow Guard 1" />
+          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwGBStill])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_1_dfg2" language="JEXL" name="ExclusiveGateway_1 Data Flow Guard 2" />
+          <ca:Milestone eventIds="" id="ExclusiveGateway_1_m1" name="ExclusiveGateway_1 Milestone 1">
+            <ca:Condition expression="GSM.isMilestoneAchieved(ExclusiveGateway_1_iteration_m2)" id="ExclusiveGateway_1_m1_c" language="JEXL" name="ExclusiveGateway_1 Milestone 1 Condition" />
           </ca:Milestone>
-          <ca:ProcessFlowGuard id="s_processstarted_pfg" name="Process started Process Flow Guard" expression="not GSM.isMilestoneAchieved(s_processstarted_m1) "/>
-        </ca:SubStage>
-        <ca:SubStage id="ParallelGateway_1" name="Parallel Gateway 1">
-          <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedUnhooked])) and GSM.isEventOccurring(Container_e)" id="ParallelGateway_1_dfg1" language="JEXL" name="ParallelGateway_1 Data Flow Guard 1"/>
-          <ca:DataFlowGuard eventIds="ce_c_portion_started" expression="GSM.isEventOccurring(ce_c_portion_started)" id="ParallelGateway_1_dfg2" language="JEXL" name="ParallelGateway_1 Data Flow Guard 2"/>
-          <ca:Milestone eventIds="" id="ParallelGateway_1_m1" name="ParallelGateway_1 Milestone 1">
-            <ca:Condition expression="GSM.isMilestoneAchieved(SequenceFlow_2_m1) and GSM.isMilestoneAchieved(SequenceFlow_4_m1)" id="ParallelGateway_1_m1_c" language="JEXL" name="ParallelGateway_1 Milestone 1 Condition"/>
-          </ca:Milestone>
-          <ca:SubStage id="SequenceFlow_2">
-            <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedUnhooked])) and GSM.isEventOccurring(Container_e)" id="SequenceFlow_2_dfg1" language="JEXL" name="SequenceFlow_2 Data Flow Guard 1"/>
-            <ca:Milestone eventIds="" id="SequenceFlow_2_m1" name="SequenceFlow_2 Milestone 1">
-              <ca:Condition expression="(GSM.isMilestoneAchieved(fill_in_container_m1))" id="SequenceFlow_2_m1_c" language="JEXL" name="SequenceFlow_2 Milestone 1 Condition"/>
+          <ca:SubStage id="ExclusiveGateway_1_iteration" name="ExclusiveGateway_1 SequenceFlow_13">
+            <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrMoving]) or ({infoModel./infoModel/Truck/status} == [HwGBMoving])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_1_iteration_dfg1" language="JEXL" name="ExclusiveGateway_1_iteration Data Flow Guard 1" />
+            <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwGBStill])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_1_iteration_dfg2" language="JEXL" name="ExclusiveGateway_1_iteration Data Flow Guard 2" />
+            <ca:Milestone eventIds="" id="ExclusiveGateway_1_iteration_m1" name="ExclusiveGateway_1_iteration Milestone 1">
+              <ca:Condition expression="GSM.isMilestoneAchieved(SequenceFlow_3_m1) and ((GSM.isMilestoneAchieved(SequenceFlow_13_m1) and (not (({infoModel./infoModel/Truck/status} == [ChrStill]) or ({infoModel./infoModel/Truck/status} == [HwMoving]))))) and not (GSM.isStageActive(SequenceFlow_13))" id="ExclusiveGateway_1_iteration_m1_c" language="JEXL" name="ExclusiveGateway_1_iteration Milestone 1 Condition" />
             </ca:Milestone>
-            <ca:SubStage id="fill_in_container" name="Fill in container">
-              <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedUnhooked])) and GSM.isEventOccurring(Container_e)" id="fill_in_container_dfg1" language="JEXL" name="fill_in_container Data Flow Guard 1"/>
-              <ca:Milestone eventIds="Container_l" id="fill_in_container_m1" name="fill_in_container Milestone 1">
-                <ca:Condition expression="(({infoModel./infoModel/Container/status} == [ClosedUnhooked])) and GSM.isEventOccurring(Container_l)" id="fill_in_container_m1_c" language="JEXL" name="fill_in_container Milestone 1 Condition"/>
-              </ca:Milestone>
-              <ca:ProcessFlowGuard id="fill_in_container_pfg" name="Fill in container Process Flow Guard" expression="not (GSM.isMilestoneAchieved(fill_in_container_m1))"/>
-            </ca:SubStage>
-            <ca:ProcessFlowGuard id="SequenceFlow_2_pfg" expression="not GSM.isMilestoneAchieved(SequenceFlow_2_m1)"/>
-          </ca:SubStage>
-          <ca:SubStage id="SequenceFlow_4">
-            <ca:DataFlowGuard eventIds="ce_c_portion_started" expression="GSM.isEventOccurring(ce_c_portion_started)" id="SequenceFlow_4_dfg1" language="JEXL" name="SequenceFlow_4 Data Flow Guard 1"/>
-            <ca:Milestone eventIds="" id="SequenceFlow_4_m1" name="SequenceFlow_4 Milestone 1">
-              <ca:Condition expression="GSM.isMilestoneAchieved(ce_c_portion_started_m1)" id="SequenceFlow_4_m1_c" language="JEXL" name="SequenceFlow_4 Milestone 1 Condition"/>
+            <ca:Milestone eventIds="" id="ExclusiveGateway_1_iteration_m2" name="ExclusiveGateway_1_iteration Milestone 2">
+              <ca:Condition expression="GSM.isMilestoneAchieved(SequenceFlow_3_m1)  and (({infoModel./infoModel/Truck/status} == [ChrStill]) or ({infoModel./infoModel/Truck/status} == [HwMoving]))  and not (GSM.isStageActive(SequenceFlow_13))" id="ExclusiveGateway_1_iteration_m2_c" language="JEXL" name="ExclusiveGateway_1_iteration Milestone 2 Condition" />
             </ca:Milestone>
-            <ca:SubStage id="ce_c_portion_started" name="Carrier portion started">
-              <ca:DataFlowGuard eventIds="ce_c_portion_started" expression="GSM.isEventOccurring(ce_c_portion_started)" id="ce_c_portion_started_dfg1" language="JEXL" name="ce_c_portion_started Data Flow Guard 1"/>
-              <ca:Milestone eventIds="ce_c_portion_started" id="ce_c_portion_started_m1" name="ce_c_portion_started Milestone 1">
-                <ca:Condition expression="GSM.isEventOccurring(ce_c_portion_started)" id="ce_c_portion_started_m1_c" language="JEXL" name="ce_c_portion_started Milestone 1 Condition"/>
+            <ca:SubStage id="SequenceFlow_13">
+              <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwGBStill])) and GSM.isEventOccurring(Truck_e)" id="SequenceFlow_13_dfg1" language="JEXL" name="SequenceFlow_13 Data Flow Guard 1" />
+              <ca:Milestone eventIds="" id="SequenceFlow_13_m1" name="SequenceFlow_13 Milestone 1">
+                <ca:Condition expression="(GSM.isMilestoneAchieved(TakeBreakUK_m1))" id="SequenceFlow_13_m1_c" language="JEXL" name="SequenceFlow_13 Milestone 1 Condition" />
               </ca:Milestone>
-              <ca:ProcessFlowGuard id="ce_c_portion_started_pfg" name="Carrier portion started Process Flow Guard" expression="not GSM.isMilestoneAchieved(ce_c_portion_started_m1) "/>
+              <ca:SubStage id="TakeBreakUK" name="Take break in UK">
+                <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwGBStill])) and GSM.isEventOccurring(Truck_e)" id="TakeBreakUK_dfg1" language="JEXL" name="TakeBreakUK Data Flow Guard 1" />
+                <ca:Milestone eventIds="Truck_l" id="TakeBreakUK_m1" name="TakeBreakUK Milestone 1">
+                  <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [HwGBMoving]) or ({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_l)" id="TakeBreakUK_m1_c" language="JEXL" name="TakeBreakUK Milestone 1 Condition" />
+                </ca:Milestone>
+                <ca:ProcessFlowGuard id="TakeBreakUK_pfg" name="Take break in UK Process Flow Guard" expression="not (GSM.isMilestoneAchieved(TakeBreakUK_m1))" />
+              </ca:SubStage>
+              <ca:ProcessFlowGuard id="SequenceFlow_13_pfg" expression="GSM.isMilestoneAchieved(SequenceFlow_3_m1) and (not (({infoModel./infoModel/Truck/status} == [ChrStill]) or ({infoModel./infoModel/Truck/status} == [HwMoving]))) and not GSM.isMilestoneAchieved(SequenceFlow_13_m1)" />
             </ca:SubStage>
-            <ca:ProcessFlowGuard id="SequenceFlow_4_pfg" expression="not GSM.isMilestoneAchieved(SequenceFlow_4_m1)"/>
+            <ca:SubStage id="SequenceFlow_3">
+              <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrMoving]) or ({infoModel./infoModel/Truck/status} == [HwGBMoving])) and GSM.isEventOccurring(Truck_e)" id="SequenceFlow_3_dfg1" language="JEXL" name="SequenceFlow_3 Data Flow Guard 1" />
+              <ca:Milestone eventIds="" id="SequenceFlow_3_m1" name="SequenceFlow_3 Milestone 1">
+                <ca:Condition expression="(GSM.isMilestoneAchieved(TravelUK_m1))" id="SequenceFlow_3_m1_c" language="JEXL" name="SequenceFlow_3 Milestone 1 Condition" />
+              </ca:Milestone>
+              <ca:SubStage id="TravelUK" name="Travel in UK">
+                <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrMoving]) or ({infoModel./infoModel/Truck/status} == [HwGBMoving])) and GSM.isEventOccurring(Truck_e)" id="TravelUK_dfg1" language="JEXL" name="TravelUK Data Flow Guard 1" />
+                <ca:Milestone eventIds="Truck_l" id="TravelUK_m1" name="TravelUK Milestone 1">
+                  <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [HwGBStill]) or ({infoModel./infoModel/Truck/status} == [ChrStill])) and GSM.isEventOccurring(Truck_l)" id="TravelUK_m1_c" language="JEXL" name="TravelUK Milestone 1 Condition" />
+                </ca:Milestone>
+                <ca:ProcessFlowGuard id="TravelUK_pfg" name="Travel in UK Process Flow Guard" expression="not (GSM.isMilestoneAchieved(TravelUK_m1))" />
+              </ca:SubStage>
+              <ca:ProcessFlowGuard id="SequenceFlow_3_pfg" expression="not GSM.isMilestoneAchieved(SequenceFlow_3_m1)" />
+            </ca:SubStage>
           </ca:SubStage>
-          <ca:ProcessFlowGuard id="ParallelGateway_1_pfg" name="Parallel Gateway 1 Process Flow Guard" expression="not GSM.isMilestoneAchieved(ParallelGateway_1_m1) and GSM.isMilestoneAchieved(s_processstarted_m1)"/>
+          <ca:ProcessFlowGuard id="ExclusiveGateway_1_pfg" name="ExclusiveGateway_1 Process Flow Guard" expression="not GSM.isMilestoneAchieved(ExclusiveGateway_1_m1) and (GSM.isMilestoneAchieved(LoadContainer_m1))" />
         </ca:SubStage>
-        <ca:SubStage id="b_container_overheated_exception" name="blockingBE">
-          <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedHooked])) and GSM.isEventOccurring(Container_e)" id="b_container_overheated_exception_dfg1" language="JEXL" name="b_container_overheated_exception Data Flow Guard 1"/>
-          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Truck_e)" id="b_container_overheated_exception_dfg2" language="JEXL" name="b_container_overheated_exception Data Flow Guard 2"/>
-          <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_e)" id="b_container_overheated_exception_dfg3" language="JEXL" name="b_container_overheated_exception Data Flow Guard 3"/>
-          <ca:DataFlowGuard eventIds="te_c_portion_ended" expression="GSM.isEventOccurring(te_c_portion_ended)" id="b_container_overheated_exception_dfg4" language="JEXL" name="b_container_overheated_exception Data Flow Guard 4"/>
-          <ca:DataFlowGuard eventIds="te_process_failed" expression="GSM.isEventOccurring(te_process_failed)" id="b_container_overheated_exception_dfg5" language="JEXL" name="b_container_overheated_exception Data Flow Guard 5"/>
-          <ca:Milestone eventIds="" id="b_container_overheated_exception_m1" name="b_container_overheated_exception Milestone 1">
-            <ca:Condition expression="((GSM.isMilestoneAchieved(b_container_overheated_flow2_m1) and not GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1)) or (GSM.isMilestoneAchieved(b_container_overheated_flow1_m1) and GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1))) and not (GSM.isStageActive(b_container_overheated_flow1) or GSM.isStageActive(b_container_overheated_flow2))" id="b_container_overheated_exception_m1_c" language="JEXL" name="b_container_overheated_exception Milestone 1 Condition"/>
+        <ca:SubStage id="ExclusiveGateway_7" name="ExclusiveGateway_7 SequenceFlow_6">
+          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_7_dfg1" language="JEXL" name="ExclusiveGateway_7 Data Flow Guard 1" />
+          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwStill])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_7_dfg2" language="JEXL" name="ExclusiveGateway_7 Data Flow Guard 2" />
+          <ca:Milestone eventIds="" id="ExclusiveGateway_7_m1" name="ExclusiveGateway_7 Milestone 1">
+            <ca:Condition expression="GSM.isMilestoneAchieved(ExclusiveGateway_7_iteration_m2)" id="ExclusiveGateway_7_m1_c" language="JEXL" name="ExclusiveGateway_7 Milestone 1 Condition" />
           </ca:Milestone>
-          <ca:SubStage id="b_container_overheated_flow1">
-            <ca:DataFlowGuard eventIds="te_process_failed" expression="GSM.isEventOccurring(te_process_failed)" id="b_container_overheated_flow1_dfg1" language="JEXL" name="b_container_overheated_flow1 Data Flow Guard 1"/>
-            <ca:Milestone eventIds="" id="b_container_overheated_flow1_m1" name="b_container_overheated_flow1 Milestone 1">
-              <ca:Condition expression="GSM.isMilestoneAchieved(te_process_failed_m1)" id="b_container_overheated_flow1_m1_c" language="JEXL" name="b_container_overheated_flow1 Milestone 1 Condition"/>
+          <ca:SubStage id="ExclusiveGateway_7_iteration" name="ExclusiveGateway_7 SequenceFlow_6">
+            <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_7_iteration_dfg1" language="JEXL" name="ExclusiveGateway_7_iteration Data Flow Guard 1" />
+            <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwStill])) and GSM.isEventOccurring(Truck_e)" id="ExclusiveGateway_7_iteration_dfg2" language="JEXL" name="ExclusiveGateway_7_iteration Data Flow Guard 2" />
+            <ca:Milestone eventIds="" id="ExclusiveGateway_7_iteration_m1" name="ExclusiveGateway_7_iteration Milestone 1">
+              <ca:Condition expression="GSM.isMilestoneAchieved(SequenceFlow_10_m1) and ((GSM.isMilestoneAchieved(SequenceFlow_6_m1) and (not ({infoModel./infoModel/Truck/status} == [AmsStill])))) and not (GSM.isStageActive(SequenceFlow_6))" id="ExclusiveGateway_7_iteration_m1_c" language="JEXL" name="ExclusiveGateway_7_iteration Milestone 1 Condition" />
             </ca:Milestone>
-            <ca:SubStage id="te_process_failed" name="Process failed">
-              <ca:DataFlowGuard eventIds="te_process_failed" expression="GSM.isEventOccurring(te_process_failed)" id="te_process_failed_dfg1" language="JEXL" name="te_process_failed Data Flow Guard 1"/>
-              <ca:Milestone eventIds="te_process_failed" id="te_process_failed_m1" name="te_process_failed Milestone 1">
-                <ca:Condition expression="GSM.isEventOccurring(te_process_failed)" id="te_process_failed_m1_c" language="JEXL" name="te_process_failed Milestone 1 Condition"/>
-              </ca:Milestone>
-              <ca:ProcessFlowGuard id="te_process_failed_pfg" name="Process failed Process Flow Guard" expression="not GSM.isMilestoneAchieved(te_process_failed_m1) "/>
-            </ca:SubStage>
-            <ca:ProcessFlowGuard id="b_container_overheated_flow1_pfg" expression="GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1) and not GSM.isMilestoneAchieved(b_container_overheated_flow1_m1) and not GSM.isStageActive(b_container_overheated_flow2)"/>
-          </ca:SubStage>
-          <ca:SubStage id="b_container_overheated_flow2">
-            <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedHooked])) and GSM.isEventOccurring(Container_e)" id="b_container_overheated_flow2_dfg1" language="JEXL" name="b_container_overheated_flow2 Data Flow Guard 1"/>
-            <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Truck_e)" id="b_container_overheated_flow2_dfg2" language="JEXL" name="b_container_overheated_flow2 Data Flow Guard 2"/>
-            <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_e)" id="b_container_overheated_flow2_dfg3" language="JEXL" name="b_container_overheated_flow2 Data Flow Guard 3"/>
-            <ca:DataFlowGuard eventIds="te_c_portion_ended" expression="GSM.isEventOccurring(te_c_portion_ended)" id="b_container_overheated_flow2_dfg4" language="JEXL" name="b_container_overheated_flow2 Data Flow Guard 4"/>
-            <ca:Milestone eventIds="" id="b_container_overheated_flow2_m1" name="b_container_overheated_flow2 Milestone 1">
-              <ca:Condition expression="(GSM.isMilestoneAchieved(te_c_portion_ended_m1)) and (GSM.isMilestoneAchieved(inspect_goods_m1)) and (GSM.isMilestoneAchieved(detach_container_m1))" id="b_container_overheated_flow2_m1_c" language="JEXL" name="b_container_overheated_flow2 Milestone 1 Condition"/>
+            <ca:Milestone eventIds="" id="ExclusiveGateway_7_iteration_m2" name="ExclusiveGateway_7_iteration Milestone 2">
+              <ca:Condition expression="GSM.isMilestoneAchieved(SequenceFlow_10_m1)  and ({infoModel./infoModel/Truck/status} == [AmsStill])  and not (GSM.isStageActive(SequenceFlow_6))" id="ExclusiveGateway_7_iteration_m2_c" language="JEXL" name="ExclusiveGateway_7_iteration Milestone 2 Condition" />
             </ca:Milestone>
-            <ca:SubStage id="te_c_portion_ended" name="Carrier portion ended">
-              <ca:DataFlowGuard eventIds="te_c_portion_ended" expression="GSM.isEventOccurring(te_c_portion_ended)" id="te_c_portion_ended_dfg1" language="JEXL" name="te_c_portion_ended Data Flow Guard 1"/>
-              <ca:Milestone eventIds="te_c_portion_ended" id="te_c_portion_ended_m1" name="te_c_portion_ended Milestone 1">
-                <ca:Condition expression="GSM.isEventOccurring(te_c_portion_ended)" id="te_c_portion_ended_m1_c" language="JEXL" name="te_c_portion_ended Milestone 1 Condition"/>
+            <ca:SubStage id="SequenceFlow_10">
+              <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_e)" id="SequenceFlow_10_dfg1" language="JEXL" name="SequenceFlow_10 Data Flow Guard 1" />
+              <ca:Milestone eventIds="" id="SequenceFlow_10_m1" name="SequenceFlow_10 Milestone 1">
+                <ca:Condition expression="(GSM.isMilestoneAchieved(TravelEU_m1))" id="SequenceFlow_10_m1_c" language="JEXL" name="SequenceFlow_10 Milestone 1 Condition" />
               </ca:Milestone>
-              <ca:ProcessFlowGuard id="te_c_portion_ended_pfg" name="Carrier portion ended Process Flow Guard" expression="not GSM.isMilestoneAchieved(te_c_portion_ended_m1)  and (GSM.isMilestoneAchieved(detach_container_m1))"/>
+              <ca:SubStage id="TravelEU" name="Travel in EU">
+                <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_e)" id="TravelEU_dfg1" language="JEXL" name="TravelEU Data Flow Guard 1" />
+                <ca:Milestone eventIds="Truck_l" id="TravelEU_m1" name="TravelEU Milestone 1">
+                  <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [AmsStill]) or ({infoModel./infoModel/Truck/status} == [HwStill])) and GSM.isEventOccurring(Truck_l)" id="TravelEU_m1_c" language="JEXL" name="TravelEU Milestone 1 Condition" />
+                </ca:Milestone>
+                <ca:ProcessFlowGuard id="TravelEU_pfg" name="Travel in EU Process Flow Guard" expression="not (GSM.isMilestoneAchieved(TravelEU_m1))" />
+              </ca:SubStage>
+              <ca:ProcessFlowGuard id="SequenceFlow_10_pfg" expression="not GSM.isMilestoneAchieved(SequenceFlow_10_m1)" />
             </ca:SubStage>
-            <ca:SubStage id="inspect_goods" name="Inspect goods">
-              <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [OpenedHooked])) and GSM.isEventOccurring(Container_e)" id="inspect_goods_dfg1" language="JEXL" name="inspect_goods Data Flow Guard 1"/>
-              <ca:Milestone eventIds="Container_l" id="inspect_goods_m1" name="inspect_goods Milestone 1">
-                <ca:Condition expression="(({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_l)" id="inspect_goods_m1_c" language="JEXL" name="inspect_goods Milestone 1 Condition"/>
+            <ca:SubStage id="SequenceFlow_6">
+              <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwStill])) and GSM.isEventOccurring(Truck_e)" id="SequenceFlow_6_dfg1" language="JEXL" name="SequenceFlow_6 Data Flow Guard 1" />
+              <ca:Milestone eventIds="" id="SequenceFlow_6_m1" name="SequenceFlow_6 Milestone 1">
+                <ca:Condition expression="(GSM.isMilestoneAchieved(TakeBreakEU_m1))" id="SequenceFlow_6_m1_c" language="JEXL" name="SequenceFlow_6 Milestone 1 Condition" />
               </ca:Milestone>
-              <ca:ProcessFlowGuard id="inspect_goods_pfg" name="Inspect goods Process Flow Guard" expression="not (GSM.isMilestoneAchieved(inspect_goods_m1))"/>
+              <ca:SubStage id="TakeBreakEU" name="Take break in EU">
+                <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [HwStill])) and GSM.isEventOccurring(Truck_e)" id="TakeBreakEU_dfg1" language="JEXL" name="TakeBreakEU Data Flow Guard 1" />
+                <ca:Milestone eventIds="Truck_l" id="TakeBreakEU_m1" name="TakeBreakEU Milestone 1">
+                  <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [HwMoving])) and GSM.isEventOccurring(Truck_l)" id="TakeBreakEU_m1_c" language="JEXL" name="TakeBreakEU Milestone 1 Condition" />
+                </ca:Milestone>
+                <ca:ProcessFlowGuard id="TakeBreakEU_pfg" name="Take break in EU Process Flow Guard" expression="not (GSM.isMilestoneAchieved(TakeBreakEU_m1))" />
+              </ca:SubStage>
+              <ca:ProcessFlowGuard id="SequenceFlow_6_pfg" expression="GSM.isMilestoneAchieved(SequenceFlow_10_m1) and (not ({infoModel./infoModel/Truck/status} == [AmsStill])) and not GSM.isMilestoneAchieved(SequenceFlow_6_m1)" />
             </ca:SubStage>
-            <ca:SubStage id="detach_container" name="Detach container">
-              <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Truck_e)" id="detach_container_dfg1" language="JEXL" name="detach_container Data Flow Guard 1"/>
-              <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_e)" id="detach_container_dfg2" language="JEXL" name="detach_container Data Flow Guard 2"/>
-              <ca:Milestone eventIds="Truck_l" id="detach_container_m1" name="detach_container Milestone 1">
-                <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [TerminalMoving])) and GSM.isEventOccurring(Truck_l)" id="detach_container_m1_c" language="JEXL" name="detach_container Milestone 1 Condition"/>
-              </ca:Milestone>
-              <ca:ProcessFlowGuard id="detach_container_pfg" name="Detach container Process Flow Guard" expression="not (GSM.isMilestoneAchieved(detach_container_m1)) and (GSM.isMilestoneAchieved(inspect_goods_m1))"/>
-            </ca:SubStage>
-            <ca:ProcessFlowGuard id="b_container_overheated_flow2_pfg" expression="not GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1) and not GSM.isMilestoneAchieved(b_container_overheated_flow2_m1) and not GSM.isStageActive(b_container_overheated_flow1)"/>
           </ca:SubStage>
-          <ca:ProcessFlowGuard id="b_container_overheated_exception_pfg" expression="not GSM.isMilestoneAchieved(b_container_overheated_exception_m1) and (GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1) or GSM.isMilestoneAchieved(drive_to_terminal_m1))"/>
+          <ca:ProcessFlowGuard id="ExclusiveGateway_7_pfg" name="ExclusiveGateway_7 Process Flow Guard" expression="not GSM.isMilestoneAchieved(ExclusiveGateway_7_m1) and (GSM.isMilestoneAchieved(TakeChannelTunnel_m1))" />
         </ca:SubStage>
-        <ca:SubStage id="attach_container" name="Attach container">
-          <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Container/status} == [ClosedUnhooked])) and (({infoModel./infoModel/Truck/status} == [ManufacturerStill])) and GSM.isEventOccurring(Container_e)" id="attach_container_dfg1" language="JEXL" name="attach_container Data Flow Guard 1"/>
-          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Container/status} == [ClosedUnhooked])) and (({infoModel./infoModel/Truck/status} == [ManufacturerStill])) and GSM.isEventOccurring(Truck_e)" id="attach_container_dfg2" language="JEXL" name="attach_container Data Flow Guard 2"/>
-          <ca:Milestone eventIds="Container_l" id="attach_container_m1" name="attach_container Milestone 1">
-            <ca:Condition expression="(({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_l)" id="attach_container_m1_c" language="JEXL" name="attach_container Milestone 1 Condition"/>
+        <ca:SubStage id="TakeChannelTunnel" name="Take Channel tunnel">
+          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [ChrStill])) and GSM.isEventOccurring(Truck_e)" id="TakeChannelTunnel_dfg1" language="JEXL" name="TakeChannelTunnel Data Flow Guard 1" />
+          <ca:Milestone eventIds="Truck_l" id="TakeChannelTunnel_m1" name="TakeChannelTunnel Milestone 1">
+            <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [CoqStill]) or ({infoModel./infoModel/Truck/status} == [CoqMoving])) and GSM.isEventOccurring(Truck_l)" id="TakeChannelTunnel_m1_c" language="JEXL" name="TakeChannelTunnel Milestone 1 Condition" />
           </ca:Milestone>
-          <ca:ProcessFlowGuard id="attach_container_pfg" name="Attach container Process Flow Guard" expression="not (GSM.isMilestoneAchieved(attach_container_m1)) and GSM.isMilestoneAchieved(ParallelGateway_1_m1)"/>
+          <ca:ProcessFlowGuard id="TakeChannelTunnel_pfg" name="Take Channel tunnel Process Flow Guard" expression="not (GSM.isMilestoneAchieved(TakeChannelTunnel_m1)) and GSM.isMilestoneAchieved(ExclusiveGateway_1_m1)" />
         </ca:SubStage>
-        <ca:SubStage id="drive_to_terminal" name="Drive to Inland Terminal">
-          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [ManufacturerMoving])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Truck_e)" id="drive_to_terminal_dfg1" language="JEXL" name="drive_to_terminal Data Flow Guard 1"/>
-          <ca:DataFlowGuard eventIds="Container_e" expression="(({infoModel./infoModel/Truck/status} == [ManufacturerMoving])) and (({infoModel./infoModel/Container/status} == [ClosedHooked])) and GSM.isEventOccurring(Container_e)" id="drive_to_terminal_dfg2" language="JEXL" name="drive_to_terminal Data Flow Guard 2"/>
-          <ca:Milestone eventIds="Truck_l" id="drive_to_terminal_m1" name="drive_to_terminal Milestone 1">
-            <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [TerminalStill])) and GSM.isEventOccurring(Truck_l)" id="drive_to_terminal_m1_c" language="JEXL" name="drive_to_terminal Milestone 1 Condition"/>
+        <ca:SubStage id="LoadContainer" name="Load container">
+          <ca:DataFlowGuard eventIds="Truck_e" expression="(({infoModel./infoModel/Truck/status} == [LhrStill])) and GSM.isEventOccurring(Truck_e)" id="LoadContainer_dfg1" language="JEXL" name="LoadContainer Data Flow Guard 1" />
+          <ca:Milestone eventIds="Truck_l" id="LoadContainer_m1" name="LoadContainer Milestone 1">
+            <ca:Condition expression="(({infoModel./infoModel/Truck/status} == [LhrMoving])) and GSM.isEventOccurring(Truck_l)" id="LoadContainer_m1_c" language="JEXL" name="LoadContainer Milestone 1 Condition" />
           </ca:Milestone>
-          <ca:Milestone eventIds="b_container_overheated" id="drive_to_terminal_b_container_overheated_m1" name="drive_to_terminal_b_container_overheated Milestone 1">
-            <ca:Condition expression="GSM.isEventOccurring(b_container_overheated)" id="drive_to_terminal_b_container_overheated_m1_c" language="JEXL" name="drive_to_terminal_b_container_overheated Milestone 1 Condition"/>
-          </ca:Milestone>
-          <ca:ProcessFlowGuard id="drive_to_terminal_pfg" name="Drive to Inland Terminal Process Flow Guard" expression="not (GSM.isMilestoneAchieved(drive_to_terminal_b_container_overheated_m1) or GSM.isMilestoneAchieved(drive_to_terminal_m1)) and (GSM.isMilestoneAchieved(attach_container_m1))"/>
-          <ca:FaultLogger eventIds="b_container_overheated" expression="GSM.isEventOccurring(b_container_overheated)" id="drive_to_terminal_fl1" language="JEXL" name="drive_to_terminal Fault Logger 1"/>
+          <ca:ProcessFlowGuard id="LoadContainer_pfg" name="Load container Process Flow Guard" expression="not (GSM.isMilestoneAchieved(LoadContainer_m1)) and GSM.isMilestoneAchieved(process_started_m1)" />
         </ca:SubStage>
-        <ca:SubStage id="e_processended" name="Process ended">
-          <ca:DataFlowGuard eventIds="e_processended" expression="GSM.isEventOccurring(e_processended)" id="e_processended_dfg1" language="JEXL" name="e_processended Data Flow Guard 1"/>
-          <ca:Milestone eventIds="e_processended" id="e_processended_m1" name="e_processended Milestone 1">
-            <ca:Condition expression="GSM.isEventOccurring(e_processended)" id="e_processended_m1_c" language="JEXL" name="e_processended Milestone 1 Condition"/>
+        <ca:SubStage id="process_started" name="process started">
+          <ca:DataFlowGuard eventIds="process_started" expression="GSM.isEventOccurring(process_started)" id="process_started_dfg1" language="JEXL" name="process_started Data Flow Guard 1" />
+          <ca:Milestone eventIds="process_started" id="process_started_m1" name="process_started Milestone 1">
+            <ca:Condition expression="GSM.isEventOccurring(process_started)" id="process_started_m1_c" language="JEXL" name="process_started Milestone 1 Condition" />
           </ca:Milestone>
-          <ca:ProcessFlowGuard id="e_processended_pfg" name="Process ended Process Flow Guard" expression="not GSM.isMilestoneAchieved(e_processended_m1)  and GSM.isMilestoneAchieved(b_container_overheated_exception_m1)"/>
+          <ca:ProcessFlowGuard id="process_started_pfg" name="process started Process Flow Guard" expression="not GSM.isMilestoneAchieved(process_started_m1) " />
         </ca:SubStage>
-      </ca:Stage>
-      <ca:Stage id="Container_LC" name="Container LifeCycle">
-        <ca:DataFlowGuard eventIds="Container_l" expression="true" id="Container_dfg1" language="JEXL" name="Container Data Flow Guard"/>
-        <ca:Milestone id="Container_m1" name="Container Milestone">
-          <ca:Condition expression="false" id="Container_m1_c" language="JEXL" name="Container Milestone Condition"/>
-        </ca:Milestone>
-        <ca:SubStage id="Container_OpenedUnhooked" name="OpenedUnhooked">
-          <ca:DataFlowGuard eventIds="Container_l" expression="({infoModel./infoModel/Container/status} == [OpenedUnhooked]) and GSM.isEventOccurring(Container_l)" id="Container_OpenedUnhooked_dfg1" language="JEXL" name="OpenedUnhooked Data Flow Guard"/>
-          <ca:Milestone eventIds="Container_e" id="Container_OpenedUnhooked_m1" name="OpenedUnhooked Milestone">
-            <ca:Condition expression="not ({infoModel./infoModel/Container/status} == [OpenedUnhooked]) and GSM.isEventOccurring(Container_e)" id="Container_OpenedUnhooked_m1_c" language="JEXL" name="OpenedUnhooked Milestone Condition"/>
+        <ca:SubStage id="process_ended" name="process ended">
+          <ca:DataFlowGuard eventIds="process_ended" expression="GSM.isEventOccurring(process_ended)" id="process_ended_dfg1" language="JEXL" name="process_ended Data Flow Guard 1" />
+          <ca:Milestone eventIds="process_ended" id="process_ended_m1" name="process_ended Milestone 1">
+            <ca:Condition expression="GSM.isEventOccurring(process_ended)" id="process_ended_m1_c" language="JEXL" name="process_ended Milestone 1 Condition" />
           </ca:Milestone>
-          <ca:ProcessFlowGuard id="Container_OpenedUnhooked_pfg1" name="OpenedUnhooked Process Flow Guard" expression="not (GSM.isStageActive(Container_ClosedUnhooked) or GSM.isStageActive(Container_ClosedHooked) or GSM.isStageActive(Container_OpenedHooked) or GSM.isStageActive(Container_Overheated) or GSM.isStageActive(Container_error))"/>
-        </ca:SubStage>
-        <ca:SubStage id="Container_ClosedUnhooked" name="ClosedUnhooked">
-          <ca:DataFlowGuard eventIds="Container_l" expression="({infoModel./infoModel/Container/status} == [ClosedUnhooked]) and GSM.isEventOccurring(Container_l)" id="Container_ClosedUnhooked_dfg1" language="JEXL" name="ClosedUnhooked Data Flow Guard"/>
-          <ca:Milestone eventIds="Container_e" id="Container_ClosedUnhooked_m1" name="ClosedUnhooked Milestone">
-            <ca:Condition expression="not ({infoModel./infoModel/Container/status} == [ClosedUnhooked]) and GSM.isEventOccurring(Container_e)" id="Container_ClosedUnhooked_m1_c" language="JEXL" name="ClosedUnhooked Milestone Condition"/>
-          </ca:Milestone>
-          <ca:ProcessFlowGuard id="Container_ClosedUnhooked_pfg1" name="ClosedUnhooked Process Flow Guard" expression="GSM.isStageActive(Container_OpenedUnhooked) or GSM.isStageActive(Container_ClosedHooked)"/>
-        </ca:SubStage>
-        <ca:SubStage id="Container_ClosedHooked" name="ClosedHooked">
-          <ca:DataFlowGuard eventIds="Container_l" expression="({infoModel./infoModel/Container/status} == [ClosedHooked]) and GSM.isEventOccurring(Container_l)" id="Container_ClosedHooked_dfg1" language="JEXL" name="ClosedHooked Data Flow Guard"/>
-          <ca:Milestone eventIds="Container_e" id="Container_ClosedHooked_m1" name="ClosedHooked Milestone">
-            <ca:Condition expression="not ({infoModel./infoModel/Container/status} == [ClosedHooked]) and GSM.isEventOccurring(Container_e)" id="Container_ClosedHooked_m1_c" language="JEXL" name="ClosedHooked Milestone Condition"/>
-          </ca:Milestone>
-          <ca:ProcessFlowGuard id="Container_ClosedHooked_pfg1" name="ClosedHooked Process Flow Guard" expression="GSM.isStageActive(Container_ClosedUnhooked) or GSM.isStageActive(Container_OpenedHooked)"/>
-        </ca:SubStage>
-        <ca:SubStage id="Container_OpenedHooked" name="OpenedHooked">
-          <ca:DataFlowGuard eventIds="Container_l" expression="({infoModel./infoModel/Container/status} == [OpenedHooked]) and GSM.isEventOccurring(Container_l)" id="Container_OpenedHooked_dfg1" language="JEXL" name="OpenedHooked Data Flow Guard"/>
-          <ca:Milestone eventIds="Container_e" id="Container_OpenedHooked_m1" name="OpenedHooked Milestone">
-            <ca:Condition expression="not ({infoModel./infoModel/Container/status} == [OpenedHooked]) and GSM.isEventOccurring(Container_e)" id="Container_OpenedHooked_m1_c" language="JEXL" name="OpenedHooked Milestone Condition"/>
-          </ca:Milestone>
-          <ca:ProcessFlowGuard id="Container_OpenedHooked_pfg1" name="OpenedHooked Process Flow Guard" expression="GSM.isStageActive(Container_ClosedHooked)"/>
-        </ca:SubStage>
-        <ca:SubStage id="Container_Overheated" name="Overheated">
-          <ca:DataFlowGuard eventIds="Container_l" expression="({infoModel./infoModel/Container/status} == [Overheated]) and GSM.isEventOccurring(Container_l)" id="Container_Overheated_dfg1" language="JEXL" name="Overheated Data Flow Guard"/>
-          <ca:Milestone eventIds="Container_e" id="Container_Overheated_m1" name="Overheated Milestone">
-            <ca:Condition expression="not ({infoModel./infoModel/Container/status} == [Overheated]) and GSM.isEventOccurring(Container_e)" id="Container_Overheated_m1_c" language="JEXL" name="Overheated Milestone Condition"/>
-          </ca:Milestone>
-          <ca:ProcessFlowGuard id="Container_Overheated_pfg1" name="Overheated Process Flow Guard" expression="GSM.isStageActive(Container_ClosedHooked)"/>
-        </ca:SubStage>
-        <ca:SubStage id="Container_error" name="Container error">
-          <ca:DataFlowGuard expression="not (({infoModel./infoModel/Container/status} == [OpenedUnhooked]) or ({infoModel./infoModel/Container/status} == [ClosedUnhooked]) or ({infoModel./infoModel/Container/status} == [ClosedHooked]) or ({infoModel./infoModel/Container/status} == [OpenedHooked]) or ({infoModel./infoModel/Container/status} == [Overheated])) and GSM.isEventOccurring(Container_l)" id="Container_error_dfg1" language="JEXL" name="Container Error Data Flow Guard"/>
-          <ca:Milestone id="Container_error_m1" name="Container Error Milestone">
-            <ca:Condition expression="(({infoModel./infoModel/Container/status} == [OpenedUnhooked]) or ({infoModel./infoModel/Container/status} == [ClosedUnhooked]) or ({infoModel./infoModel/Container/status} == [ClosedHooked]) or ({infoModel./infoModel/Container/status} == [OpenedHooked]) or ({infoModel./infoModel/Container/status} == [Overheated])) and GSM.isEventOccurring(Container_e)" id="Container_error_m1_c" language="JEXL" name="Container Error Milestone Condition"/>
-          </ca:Milestone>
-          <ca:ProcessFlowGuard type="application:DataFlowGuardType" expression="false" id="Container_error_pfg1" language="JEXL" name="Container Error Process Flow Guard"/>
-        </ca:SubStage>
-        <ca:SubStage id="Container_final" name="Container final">
-          <ca:DataFlowGuard expression="(GSM.isStageActive(Container_Overheated) or GSM.isStageActive(Container_ClosedUnhooked))" id="Container_final_dfg1" language="JEXL" name="Container Final Data Flow Guard"/>
-          <ca:Milestone id="Container_final_m1" name="Container Final Milestone">
-            <ca:Condition expression="not (GSM.isStageActive(Container_Overheated) or GSM.isStageActive(Container_ClosedUnhooked))" id="Container_final_m1_c" language="JEXL" name="Container Final Milestone Condition"/>
-          </ca:Milestone>
+          <ca:ProcessFlowGuard id="process_ended_pfg" name="process ended Process Flow Guard" expression="not GSM.isMilestoneAchieved(process_ended_m1)  and GSM.isMilestoneAchieved(ExclusiveGateway_7_m1)" />
         </ca:SubStage>
       </ca:Stage>
     </ca:GuardedStageModel>
