@@ -371,6 +371,8 @@ function getArtifact(artifact_type, artifact_id) {
             }
             if (artifact) {
                 response.payload.result = 'found'
+                artifact.faulty_rates = JSON.stringify([...artifact.faulty_rates])
+                artifact.timing_faulty_rates = JSON.stringify([...artifact.timing_faulty_rates])
                 response.payload.artifact = artifact
             }
             resolve(response)
@@ -699,8 +701,7 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                             });
                             if (aggregatedResult && jobAggregatedResult) {
                                 response.payload.result = "ok"
-                                //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
-                                DDB.writeNewProcessInstance(process_type, instance_name, processDetails.stakeholders, Date.now() / 1000, 'localhost', 1883)
+                                //Publish message to 'lifecycle' topic to notify aggregators about the new instance
                                 DDB.increaseProcessTypeInstanceCounter(process_type)
                                 MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, processDetails.stakeholders)
                                 resolve(response)
@@ -709,7 +710,6 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                             else if (aggregatedResult && !jobAggregatedResult) {
                                 response.payload.result = "engines_ok"
                                 //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
-                                DDB.writeNewProcessInstance(process_type, instance_name, processDetails.stakeholders, Date.now() / 1000, 'localhost', 1883)
                                 DDB.increaseProcessTypeInstanceCounter(process_type)
                                 DDB.increaseProcessTypeBpmnJobCounter(process_type)
                                 MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, processDetails.stakeholders)
