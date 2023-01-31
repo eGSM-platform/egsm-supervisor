@@ -8,10 +8,10 @@
     </bpmn-model>
 
     <perspective>
-        <name>Container</name>
-        <bpmn-model>models/bpmn_container.bpmn</bpmn-model>
-        <egsm-model>models/egsm_container.xml</egsm-model>
-        <info-model>models/info_container.xsd</info-model>
-        <bindings>models/binding_container.xml</bindings>
+        <name>Truck</name>
+        <bpmn-model>models/bpmn_truck.bpmn</bpmn-model>
+        <egsm-model>models/egsm_truck.xml</egsm-model>
+        <info-model>models/info_truck.xsd</info-model>
+        <bindings>models/binding_truck.xml</bindings>
     </perspective>
 </process-type>
