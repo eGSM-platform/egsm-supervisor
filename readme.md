@@ -17,4 +17,4 @@ The eGSM Monitoring Platform requires:
 6. Run `node main.js`
 7. The application is now running
 
-Please not that restarting this application will erase all previous aggregated information from the database!
+Please note that restarting this application will erase all previous aggregated information from the database!
