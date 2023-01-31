@@ -16,3 +16,5 @@ The eGSM Monitoring Platform requires:
 5. Before deploying any application of the platform, the database has to be populated with the necessary tables, which can be done by running `node db-init-tables`
 6. Run `node main.js`
 7. The application is now running
+
+Please not that restarting this application will erase all previous aggregated information from the database!
