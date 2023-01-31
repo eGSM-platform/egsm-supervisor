@@ -502,16 +502,21 @@ async function getProcessTypeAggregation(processtype) {
         //bpmn job cnt
         //instance cnt
         //statistics for each bpmn perspectives
-        
+
         //look for a real-time aggregation job
         //if the job found we need the real time statistocs for each bpmn perspectives
         var perspectives = []
+        var aggregation_job = await MQTTCOMM.searchForJob(processtype + '_real_time_aggregation_job')
+
         processDb.definition.perspectives.forEach(perspective => {
             perspectives.push({
                 name: perspective.name,
                 bpmn_xml: perspective.bpmn_diagram,
                 statistics: processDb.statistics[perspective.name]
             })
+            if(aggregation_job != 'not_found'){
+                aggregation_job?.['payload']?.['job']['extract']
+            }
         });
         var response = {
             module: MODULE_PROCESS_TYPE_DETAIL,
@@ -523,7 +528,14 @@ async function getProcessTypeAggregation(processtype) {
                     instance_cnt: processDb.instance_cnt,
                     perspectives: perspectives
                 },
-                real_time: undefined
+                real_time: {
+                    perspectives: aggregation_job?.['payload']?.['job']['extract'] || []
+                },
+                statistics:{
+                    bpmn_job_cnt: processDb.bpmn_job_cnt,
+                    instance_cnt: processDb.instance_cnt,
+                    perspectives: perspectives
+                }
             }
         }
         resolve(response)
@@ -752,6 +764,7 @@ function createJobInstance(jobid, jobconfig) {
                 response.payload.result = "id_not_free"
                 return resolve(response)
             }
+            jobconfig['id'] = jobid
             var result = await MQTTCOMM.createNewJob(jobconfig)
             response.payload.result = result
             return resolve(response)

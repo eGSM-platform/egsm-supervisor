@@ -8,56 +8,24 @@ var MQTTCOMM = require('./modules/communication/mqttcommunication')
 var SOCKET = require('./modules/communication/socketserver')
 var LIBRARY = require('./modules/resourcemanager/processlibrary')
 var DBCONFIG = require('./modules/egsm-common/database/databaseconfig');
+var CONNCONFIG = require('./modules/egsm-common/config/connectionconfig');
 const { Broker } = require('./modules/egsm-common/auxiliary/primitives');
 
-module.id = 'MAIN'
+const CONFIG_FILE = './config.xml'
+module.id = "MAIN"
 
-var config = undefined
-var BROKER = undefined
-var defaultBroker = new Broker('localhost', 1883, '', '')
-var parseString = xml2js.parseString;
+LOG.logSystem('DEBUG', 'Application started...', module.id)
 
-DBCONFIG.initDatabaseConnection('localhost',9000,'local','fakeMyKeyId','fakeSecretAccessKey')
+var filecontent = fs.readFileSync(CONFIG_FILE, 'utf8')
 
-//DBCONFIG.deleteTables()
-//DBCONFIG.initTables()
-//LIBRARY.exportProcessLibraryToDatabase()
+CONNCONFIG.applyConfig(filecontent)
 
-LOG.logSystem('DEBUG', 'Supervisor started', module.id)
-if (process.argv.length == 3) {
-    LOG.logSystem('DEBUG', 'Supervisor starting with initialization file', module.id)
-    try {
-        const data = fs.readFileSync(process.argv[2], 'utf8');
-        LOG.logSystem('DEBUG', 'Initialization file read', module.id)
+DBCONFIG.initDatabaseConnection(CONNCONFIG.getConfig().database_host, CONNCONFIG.getConfig().database_port, CONNCONFIG.getConfig().database_region,
+    CONNCONFIG.getConfig().database_access_key_id, CONNCONFIG.getConfig().database_secret_access_key)
 
-        parseString(data, function (err, result) {
-            if (err) {
-                LOG.logSystem('FATAL', `Error while parsing initialization file: ${err}`, module.id)
-            }
-            config = result
-            LOG.logSystem('DEBUG', 'Applying configurations', module.id)
-            BROKER = AUTOCONFIG.parseConnectionConfig(config) || defaultBroker
-        })
-    } catch (err) {
-        LOG.logSystem('FATAL', `Error while reading initialization file: ${err}`, module.id)
-        return
-    }
-}
-else if (process.argv.length <= 3) {
-    LOG.logSystem('DEBUG', 'Supervisor is starting without initialization file', module.id)
-    LOG.logSystem('DEBUG', 'Applying default MQTT broker settings', module.id)
-    BROKER = defaultBroker
-}
-else if (process.argv.length > 3) {
-    LOG.logSystem('FATAL', 'Too many arguments! Shutting down...', module.id)
-    return
-}
+MQTTCOMM.initBrokerConnection(CONNCONFIG.getConfig().primary_broker)
 
-MQTTCOMM.initBrokerConnection(BROKER)
-
-if (config) {
-    AUTOCONFIG.applyAdvancedConfig(config)
-}
+LIBRARY.exportProcessLibraryToDatabase()
 
 process.on('SIGINT', () => {
     LOG.logSystem('DEBUG', 'SIGINT signal caught. Shutting down supervisor...', module.id)
