@@ -6,6 +6,7 @@ var fs = require('fs')
 var xml2js = require('xml2js');
 var LOG = require('../egsm-common/auxiliary/logManager')
 const { Perspective, ProcessType } = require('../egsm-common/auxiliary/primitives')
+var DB = require('../egsm-common/database/databaseconnector')
 var parseString = xml2js.parseString;
 
 module.id = 'PROCESSLIB'
@@ -66,7 +67,22 @@ function loadProcessTypes() {
                             }
                         })
                     });
-                    var currentProcess = new ProcessType(name, stakeholders, description, bpmn_model, perspectives)
+                    
+                    //Parsing eGSM model of each perspectives and getting the list of eGSM stages
+                    perspectives.forEach(element => {
+                        var egsm_stages = []
+                        xml2js.parseString(element.egsm_model, function (err, result) {
+                            if (err) {
+                                throw new Error('Error while parsing XML: ' + err)
+                            }
+                            var roots = result['ca:CompositeApplicationType']['ca:Component'][0]['ca:GuardedStageModel'][0]['ca:Stage'];
+                            for (var root in roots) {
+                                _parseStageRecursive(roots[root], egsm_stages)
+                            }
+                        });
+                        element.egsm_stages = egsm_stages
+                    });
+                    var currentProcess = new ProcessType(name, [...stakeholders], description, bpmn_model, perspectives)
                     PROCESS_TYPES.set(name, currentProcess)
                 })
             } catch (err) {
@@ -97,6 +113,14 @@ function getProcessTypeList() {
     return result
 }
 
+function _parseStageRecursive(stage, stages) {
+    var children = stage['ca:SubStage'] || []
+    stages.push(stage['$'].id,)
+    for (var key in children) {
+        _parseStageRecursive(children[key], stages)
+    }
+}
+
 /**
  * Gets a Process Type definition from the module specified by process_type_name
  * @param {*} process_type_name ID of the Process Type
@@ -109,9 +133,17 @@ function getProcessType(process_type_name) {
     return 'not_found'
 }
 
+function exportProcessLibraryToDatabase() {
+    var processes = getProcessTypeList()
+    processes.forEach(process => {
+        DB.writeNewProcessType(getProcessType(process.process_type_name))
+    });
+}
+
 loadProcessTypes()
 
 module.exports = {
     getProcessTypeList: getProcessTypeList,
     getProcessType: getProcessType,
+    exportProcessLibraryToDatabase:exportProcessLibraryToDatabase,
 }
