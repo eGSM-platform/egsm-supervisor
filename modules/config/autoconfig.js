@@ -29,7 +29,6 @@ async function applyAdvancedConfig(config) {
         var bpmnJob = processes[i]['bpmn-job'][0] || false
         for (var index = 0; index < quantity; index++) {
             var instanceName = instanceNamePrefix + (index + 1).toString()
-            console.log(index)
             await SOCKET.createProcessInstance(processType, instanceName, bpmnJob)
         }
 
