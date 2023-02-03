@@ -16,8 +16,6 @@ const SUPERVISOR_TO_WORKERS = 'supervisor_to_workers'
 const AGGREGATORS_TO_SUPERVISOR = 'aggregators_to_supervisor'
 const SUPERVISOR_TO_AGGREGATORS = 'supervisor_to_aggregators'
 
-const TOPIC_PROCESS_LIFECYCLE = 'process_lifecycle'
-
 var BROKER = undefined
 
 //Waiting periods for different operation types
@@ -25,6 +23,7 @@ const FREE_SLOT_WAITING_PERIOD = 250
 const ENGINE_SEARCH_WAITING_PERIOD = 500
 const ENGINE_PONG_WAITING_PERIOD = 500
 const PROCESS_SEARCH_WAITING_PERIOD = 500
+const DELETE_ENGINE_WAITING_PERIOD = 2000
 const AGGREGATOR_PONG_WAITING_PERIOD = 500
 
 //Containers to store pending requests and store replies in case of multi-party cooperation
@@ -367,7 +366,7 @@ async function deleteEngine(engineid) {
     MQTT.publishTopic(BROKER.host, BROKER.port, SUPERVISOR_TO_WORKERS, JSON.stringify(message))
     var promise = new Promise(function (resolve, reject) {
         REQUEST_PROMISES.set(request_id, resolve)
-        wait(PROCESS_SEARCH_WAITING_PERIOD).then(() => {
+        wait(DELETE_ENGINE_WAITING_PERIOD).then(() => {
             LOG.logSystem('DEBUG', `searchForProcess waiting period elapsed for deleteEngine`, module.id)
             resolve("delete_error")
         })
@@ -580,24 +579,6 @@ async function getAggregatorList() {
 }
 
 /**
- * Publishing a Process Lifecycle events to notify interested Aggregators
- * @param {string} type Type of lifecycle event: 'created' or 'destructed'
- * @param {string} processtype Type of process
- * @param {string} instnaceid Process Instnace ID
- */
-async function publishProcessLifecycleEvent(type, process_instance_id, process_type, stakeholders) {
-    var message = {
-        type: type,
-        process: {
-            process_type: process_type,
-            instance_id: process_instance_id,
-            stakeholders: stakeholders
-        }
-    }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_PROCESS_LIFECYCLE, JSON.stringify(message))
-}
-
-/**
  * Getting free Job Slots on online Aggregators
  * @returns Returns a Promise, which will contain an Aggregator ID with at least one free Job slot, or 'no_response' in case of no free slot
  */
@@ -741,7 +722,6 @@ module.exports = {
 
     createNewMonitoringActivity: createNewMonitoringActivity,
     getAggregatorList: getAggregatorList,
-    publishProcessLifecycleEvent: publishProcessLifecycleEvent,
 
     createNewJob: createNewJob,
     searchForJob: searchForJob,
