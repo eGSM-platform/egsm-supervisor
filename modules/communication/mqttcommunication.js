@@ -16,8 +16,6 @@ const SUPERVISOR_TO_WORKERS = 'supervisor_to_workers'
 const AGGREGATORS_TO_SUPERVISOR = 'aggregators_to_supervisor'
 const SUPERVISOR_TO_AGGREGATORS = 'supervisor_to_aggregators'
 
-const TOPIC_PROCESS_LIFECYCLE = 'process_lifecycle'
-
 var BROKER = undefined
 
 //Waiting periods for different operation types
@@ -581,24 +579,6 @@ async function getAggregatorList() {
 }
 
 /**
- * Publishing a Process Lifecycle events to notify interested Aggregators
- * @param {string} type Type of lifecycle event: 'created' or 'destructed'
- * @param {string} processtype Type of process
- * @param {string} instnaceid Process Instnace ID
- */
-async function publishProcessLifecycleEvent(type, process_instance_id, process_type, stakeholders) {
-    var message = {
-        type: type,
-        process: {
-            process_type: process_type,
-            instance_id: process_instance_id,
-            stakeholders: stakeholders
-        }
-    }
-    MQTT.publishTopic(BROKER.host, BROKER.port, TOPIC_PROCESS_LIFECYCLE, JSON.stringify(message))
-}
-
-/**
  * Getting free Job Slots on online Aggregators
  * @returns Returns a Promise, which will contain an Aggregator ID with at least one free Job slot, or 'no_response' in case of no free slot
  */
@@ -742,7 +722,6 @@ module.exports = {
 
     createNewMonitoringActivity: createNewMonitoringActivity,
     getAggregatorList: getAggregatorList,
-    publishProcessLifecycleEvent: publishProcessLifecycleEvent,
 
     createNewJob: createNewJob,
     searchForJob: searchForJob,

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <process-type>
-    <name>Running_example</name>
-    <description>The original process from the SMARTifact research</description>
+    <name>LHR-AMS</name>
+    <description>The original LHR-AMS process from the SMARTifact research</description>
 
     <bpmn-model>
         <model>models/process.bpmn</model>

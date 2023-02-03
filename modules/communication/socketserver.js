@@ -300,7 +300,6 @@ async function deleteProcessInstance(process_type, process_instance_id) {
                     delete_result: result,
                 }
             }
-            MQTTCOMM.publishProcessLifecycleEvent('destructed', process_instance_id, process_type)
             resolve(response)
         })
     });
@@ -514,7 +513,7 @@ async function getProcessTypeAggregation(processtype) {
                 bpmn_xml: perspective.bpmn_diagram,
                 statistics: processDb.statistics[perspective.name]
             })
-            if(aggregation_job != 'not_found'){
+            if (aggregation_job != 'not_found') {
                 aggregation_job?.['payload']?.['job']['extract']
             }
         });
@@ -531,7 +530,7 @@ async function getProcessTypeAggregation(processtype) {
                 real_time: {
                     perspectives: aggregation_job?.['payload']?.['job']['extract'] || []
                 },
-                statistics:{
+                statistics: {
                     bpmn_job_cnt: processDb.bpmn_job_cnt,
                     instance_cnt: processDb.instance_cnt,
                     perspectives: perspectives
@@ -715,16 +714,14 @@ async function createProcessInstance(process_type, instance_name, bpmn_job) {
                                 response.payload.result = "ok"
                                 //Publish message to 'lifecycle' topic to notify aggregators about the new instance
                                 DDB.increaseProcessTypeInstanceCounter(process_type)
-                                MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, processDetails.stakeholders)
                                 resolve(response)
                             }
                             //Engines are created, but the requested related jobs are not ok
                             else if (aggregatedResult && !jobAggregatedResult) {
                                 response.payload.result = "engines_ok"
-                                //Publish message to 'lifecycle' topic to notify aggregators about the new instnace
+                                //Publish message to 'lifecycle' topic to notify aggregators about the new instance
                                 DDB.increaseProcessTypeInstanceCounter(process_type)
                                 DDB.increaseProcessTypeBpmnJobCounter(process_type)
-                                MQTTCOMM.publishProcessLifecycleEvent('created', instance_name, process_type, processDetails.stakeholders)
                                 resolve(response)
                             }
                             else {
